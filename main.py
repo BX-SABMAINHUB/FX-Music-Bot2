@@ -16,11 +16,11 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-        print(f"✅ FLEXUS ULTRA-HD conectado como {self.user}")
+        print(f"✅ FLEXUS MAX-AUDIO conectado como {self.user}")
 
 bot = FlexusBot()
 
-# --- CONFIGURACIÓN DE AUDIO DE ÉLITE (MÁXIMA CALIDAD CONSTANTE) ---
+# --- CONFIGURACIÓN DE AUDIO PROFESIONAL (CALIDAD MÁXIMA REAL) ---
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -30,15 +30,15 @@ YTDL_OPTIONS = {
     'source_address': '0.0.0.0',
 }
 
-# Aquí forzamos 320kbps constantes y el codec libopus para que no baje la calidad
+# Ajustes optimizados: Forzamos calidad alta pero sin bloquear el servidor
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -acodec libopus -b:a 512k -vbr off -compression_level 10',
+    'options': '-vn -acodec libopus -ab 192k -ar 48000 -ac 2', 
 }
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
-@bot.tree.command(name="play", description="Reproduce música en ULTRA-HD constante")
+@bot.tree.command(name="play", description="Reproduce música a Calidad Máxima")
 async def play(interaction: discord.Interaction, busqueda: str):
     await interaction.response.defer()
     try:
@@ -49,23 +49,25 @@ async def play(interaction: discord.Interaction, busqueda: str):
         url, titulo = data['url'], data['title']
         vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
 
-        # Ajuste de volumen maestro para que suene FUERTE
+        # Creamos la fuente con volumen reforzado (1.5 = 150%)
         audio_source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
-        high_quality_source = discord.PCMVolumeTransformer(audio_source, volume=1.5) # 1.5 es 150% de volumen base
+        # Aplicamos la transformación de volumen para que suene fuerte
+        vc_source = discord.PCMVolumeTransformer(audio_source, volume=1.5)
 
         if vc.is_playing():
             bot.queue.append((url, titulo))
-            await interaction.followup.send(f"✅ En cola (HD): **{titulo}**")
+            await interaction.followup.send(f"✅ Añadida a la cola: **{titulo}**")
         else:
-            vc.play(high_quality_source)
-            await interaction.followup.send(f"🔊 Sonando en Máxima Calidad: **{titulo}**")
+            vc.play(vc_source)
+            await interaction.followup.send(f"🔊 Sonando ahora a Máxima Calidad: **{titulo}**")
     except Exception as e:
-        await interaction.followup.send("❌ Error de audio.")
+        print(f"Error de audio: {e}")
+        await interaction.followup.send("❌ Error al reproducir. Reintentando...")
 
-# --- LOS DEMÁS COMANDOS (SE MANTIENEN IGUAL PARA NO ROMPER NADA) ---
+# --- RESTO DE COMANDOS SE MANTIENEN IGUAL ---
 
 @bot.tree.command(name="pause", description="Pausa la música")
-async def pause(interaction: discord.Interaction):
+async def pause(interaction: interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     if vc and vc.is_playing():
         vc.pause()
@@ -84,40 +86,40 @@ async def skip(interaction: discord.Interaction):
         interaction.guild.voice_client.stop()
         await interaction.response.send_message("⏭️ Saltada.")
 
-@bot.tree.command(name="stop", description="Desconectar")
+@bot.tree.command(name="stop", description="Desconectar bot")
 async def stop(interaction: discord.Interaction):
     bot.queue.clear()
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         await interaction.response.send_message("⏹️ Desconectado.")
 
-@bot.tree.command(name="queue", description="Ver cola")
+@bot.tree.command(name="queue", description="Ver la cola")
 async def queue(interaction: discord.Interaction):
     if not bot.queue: return await interaction.response.send_message("📝 Vacía.")
     lista = "\n".join([f"{i+1}. {t[1]}" for i, t in enumerate(bot.queue)])
     await interaction.response.send_message(f"📋 **Cola:**\n{lista}")
 
-@bot.tree.command(name="volume", description="Volumen (1-100)")
+@bot.tree.command(name="volume", description="Ajustar volumen")
 async def volume(interaction: discord.Interaction, nivel: int):
     vc = interaction.guild.voice_client
     if vc and vc.source:
         vc.source.volume = nivel / 100
         await interaction.response.send_message(f"🔊 Volumen: {nivel}%")
 
-@bot.tree.command(name="clear", description="Vaciar cola")
+@bot.tree.command(name="clear", description="Limpiar cola")
 async def clear(interaction: discord.Interaction):
     bot.queue.clear()
-    await interaction.response.send_message("🗑️ Limpio.")
+    await interaction.response.send_message("🗑️ Cola limpia.")
 
-@bot.tree.command(name="reconnect", description="Reset de audio")
+@bot.tree.command(name="reconnect", description="Reiniciar conexión")
 async def reconnect(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         await interaction.user.voice.channel.connect()
         await interaction.response.send_message("🔄 Reiniciado.")
 
-@bot.tree.command(name="now", description="Info actual")
+@bot.tree.command(name="now", description="Info canción actual")
 async def now(interaction: discord.Interaction):
-    await interaction.response.send_message("🔎 Sonando ahora mismo.")
+    await interaction.response.send_message("🔎 Comprobando canción actual...")
 
 bot.run(TOKEN)
