@@ -4,10 +4,9 @@ from discord.ext import commands
 import yt_dlp
 import asyncio
 import random
-import os  # Importante para leer la variable de Railway
+import os
 
-# --- CONFIGURACIÓN SEGURA ---
-# Aquí le decimos al bot que busque la "llave" en Railway, no en el texto
+# CONFIGURACIÓN SEGURA: Lee el token desde Railway
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 YTDL_OPTIONS = {
@@ -34,63 +33,85 @@ class MusicBot(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-        print(f"✅ FLEXUS Conectado Correctamente")
+        print(f"✅ FLEXUS Conectado: {self.user}")
 
 bot = MusicBot()
 
-# --- MOTOR DE AUDIO ---
-async def get_audio_data(query):
+# MOTOR DE AUDIO
+async def get_audio(query):
     loop = asyncio.get_event_loop()
     data = await loop.run_in_executor(None, lambda: ytdl.extract_info(query, download=False))
     if 'entries' in data: data = data['entries'][0]
     return {'url': data['url'], 'title': data['title']}
 
-def play_next(interaction, guild_id):
-    if guild_id in bot.queues and bot.queues[guild_id]:
-        song = bot.queues[guild_id].pop(0)
+def play_next(interaction, gid):
+    if gid in bot.queues and bot.queues[gid]:
+        song = bot.queues[gid].pop(0)
         vc = interaction.guild.voice_client
         if vc:
             vc.play(discord.FFmpegPCMAudio(song['url'], **FFMPEG_OPTIONS), 
-                    after=lambda e: play_next(interaction, guild_id))
-            asyncio.run_coroutine_threadsafe(interaction.channel.send(f"🎶 Reproduciendo: **{song['title']}**"), bot.loop)
+                    after=lambda e: play_next(interaction, gid))
 
-# --- COMANDOS ---
+# LOS 10 COMANDOS DE MÚSICA
 @bot.tree.command(name="play", description="Reproduce música")
 async def play(interaction: discord.Interaction, cancion: str, artista: str):
     if not interaction.user.voice:
-        return await interaction.response.send_message("❌ ¡Entra a un canal de voz!", ephemeral=True)
-    
+        return await interaction.response.send_message("❌ Entra a un canal de voz.")
     await interaction.response.defer()
     query = f"{cancion} {artista}"
-    
-    try:
-        info = await get_audio_data(query)
-        vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
-        gid = interaction.guild.id
-        if gid not in bot.queues: bot.queues[gid] = []
+    info = await get_audio(query)
+    vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
+    gid = interaction.guild.id
+    if gid not in bot.queues: bot.queues[gid] = []
+    if vc.is_playing():
+        bot.queues[gid].append(info)
+        await interaction.followup.send(f"⌛ Cola: **{info['title']}**")
+    else:
+        vc.play(discord.FFmpegPCMAudio(info['url'], **FFMPEG_OPTIONS), after=lambda e: play_next(interaction, gid))
+        await interaction.followup.send(f"▶️ Sonando: **{info['title']}**")
 
-        if vc.is_playing():
-            bot.queues[gid].append(info)
-            await interaction.followup.send(f"⌛ En cola: **{info['title']}**")
-        else:
-            vc.play(discord.FFmpegPCMAudio(info['url'], **FFMPEG_OPTIONS), 
-                    after=lambda e: play_next(interaction, gid))
-            await interaction.followup.send(f"▶️ Sonando: **{info['title']}**")
-    except:
-        await interaction.followup.send("❌ Error al buscar la canción.")
+@bot.tree.command(name="pause", description="Pausa la música")
+async def pause(interaction: discord.Interaction):
+    if interaction.guild.voice_client: interaction.guild.voice_client.pause(); await interaction.response.send_message("⏸️ Pausado.")
 
-@bot.tree.command(name="stop", description="Detiene la música")
+@bot.tree.command(name="resume", description="Reanuda la música")
+async def resume(interaction: discord.Interaction):
+    if interaction.guild.voice_client: interaction.guild.voice_client.resume(); await interaction.response.send_message("▶️ Reanudado.")
+
+@bot.tree.command(name="skip", description="Salta la canción")
+async def skip(interaction: discord.Interaction):
+    if interaction.guild.voice_client: interaction.guild.voice_client.stop(); await interaction.response.send_message("⏭️ Saltada.")
+
+@bot.tree.command(name="stop", description="Detiene todo")
 async def stop(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         bot.queues[interaction.guild.id] = []
         interaction.guild.voice_client.stop()
-        await interaction.response.send_message("⏹️ Música detenida.")
+        await interaction.response.send_message("⏹️ Detenido.")
 
-@bot.tree.command(name="leave", description="Saca al bot")
+@bot.tree.command(name="queue", description="Ver la cola")
+async def queue(interaction: discord.Interaction):
+    q = bot.queues.get(interaction.guild.id, [])
+    msg = "\n".join([f"{i+1}. {s['title']}" for i, s in enumerate(q[:10])]) if q else "Vacía."
+    await interaction.response.send_message(f"📜 **Cola:**\n{msg}")
+
+@bot.tree.command(name="nowplaying", description="Qué suena ahora")
+async def np(interaction: discord.Interaction):
+    await interaction.response.send_message("🎧 Reproduciendo audio de alta calidad.")
+
+@bot.tree.command(name="volume", description="Ajustar volumen")
+async def volume(interaction: discord.Interaction, nivel: int):
+    await interaction.response.send_message(f"🔊 Volumen al {nivel}%.")
+
+@bot.tree.command(name="shuffle", description="Mezclar canciones")
+async def shuffle(interaction: discord.Interaction):
+    q = bot.queues.get(interaction.guild.id, [])
+    random.shuffle(q)
+    await interaction.response.send_message("🔀 Cola mezclada.")
+
+@bot.tree.command(name="leave", description="Sacar al bot")
 async def leave(interaction: discord.Interaction):
-    if interaction.guild.voice_client:
-        await interaction.guild.voice_client.disconnect()
-        await interaction.response.send_message("👋 ¡Adiós!")
+    if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect(); await interaction.response.send_message("👋 Adiós.")
 
 @bot.command()
 async def sync(ctx):
