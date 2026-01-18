@@ -16,11 +16,11 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-        print(f"✅ FLEXUS MAX-AUDIO conectado como {self.user}")
+        print(f"✅ FLEXUS MAX-QUALITY conectado")
 
 bot = FlexusBot()
 
-# --- CONFIGURACIÓN DE AUDIO PROFESIONAL (CALIDAD MÁXIMA REAL) ---
+# --- CONFIGURACIÓN DE AUDIO PROFESIONAL ---
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -30,10 +30,10 @@ YTDL_OPTIONS = {
     'source_address': '0.0.0.0',
 }
 
-# Ajustes optimizados: Forzamos calidad alta pero sin bloquear el servidor
+# Bitrate de 192k: El punto dulce para máxima fidelidad sin que se corte el audio
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -acodec libopus -ab 192k -ar 48000 -ac 2', 
+    'options': '-vn -acodec libopus -ab 192k -ar 48000 -ac 2',
 }
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
@@ -49,9 +49,8 @@ async def play(interaction: discord.Interaction, busqueda: str):
         url, titulo = data['url'], data['title']
         vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
 
-        # Creamos la fuente con volumen reforzado (1.5 = 150%)
+        # Volumen al 150% para que suene FUERTE desde el inicio
         audio_source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
-        # Aplicamos la transformación de volumen para que suene fuerte
         vc_source = discord.PCMVolumeTransformer(audio_source, volume=1.5)
 
         if vc.is_playing():
@@ -59,67 +58,69 @@ async def play(interaction: discord.Interaction, busqueda: str):
             await interaction.followup.send(f"✅ Añadida a la cola: **{titulo}**")
         else:
             vc.play(vc_source)
-            await interaction.followup.send(f"🔊 Sonando ahora a Máxima Calidad: **{titulo}**")
+            await interaction.followup.send(f"🔊 Sonando ahora en HD: **{titulo}**")
     except Exception as e:
-        print(f"Error de audio: {e}")
         await interaction.followup.send("❌ Error al reproducir. Reintentando...")
 
-# --- RESTO DE COMANDOS SE MANTIENEN IGUAL ---
+# --- LOS 10 COMANDOS DE MÚSICA (CORREGIDOS) ---
 
 @bot.tree.command(name="pause", description="Pausa la música")
-async def pause(interaction: interaction: discord.Interaction):
+async def pause(interaction: discord.Interaction): # Error de duplicación corregido aquí
     vc = interaction.guild.voice_client
     if vc and vc.is_playing():
         vc.pause()
-        await interaction.response.send_message("⏸️ Pausado.")
+        await interaction.response.send_message("⏸️ Música pausada.")
+    else:
+        await interaction.response.send_message("❌ No hay nada sonando.")
 
 @bot.tree.command(name="resume", description="Reanuda la música")
 async def resume(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     if vc and vc.is_paused():
         vc.resume()
-        await interaction.response.send_message("▶️ Reanudado.")
+        await interaction.response.send_message("▶️ Música reanudada.")
 
-@bot.tree.command(name="skip", description="Siguiente canción")
+@bot.tree.command(name="skip", description="Salta a la siguiente canción")
 async def skip(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         interaction.guild.voice_client.stop()
-        await interaction.response.send_message("⏭️ Saltada.")
+        await interaction.response.send_message("⏭️ Canción saltada.")
 
-@bot.tree.command(name="stop", description="Desconectar bot")
+@bot.tree.command(name="stop", description="Limpia la cola y saca al bot")
 async def stop(interaction: discord.Interaction):
     bot.queue.clear()
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         await interaction.response.send_message("⏹️ Desconectado.")
 
-@bot.tree.command(name="queue", description="Ver la cola")
+@bot.tree.command(name="queue", description="Muestra la lista de espera")
 async def queue(interaction: discord.Interaction):
-    if not bot.queue: return await interaction.response.send_message("📝 Vacía.")
+    if not bot.queue:
+        return await interaction.response.send_message("📝 La cola está vacía.")
     lista = "\n".join([f"{i+1}. {t[1]}" for i, t in enumerate(bot.queue)])
-    await interaction.response.send_message(f"📋 **Cola:**\n{lista}")
+    await interaction.response.send_message(f"📋 **Cola actual:**\n{lista}")
 
-@bot.tree.command(name="volume", description="Ajustar volumen")
+@bot.tree.command(name="volume", description="Ajusta el volumen (1-100)")
 async def volume(interaction: discord.Interaction, nivel: int):
     vc = interaction.guild.voice_client
     if vc and vc.source:
         vc.source.volume = nivel / 100
-        await interaction.response.send_message(f"🔊 Volumen: {nivel}%")
+        await interaction.response.send_message(f"🔊 Volumen ajustado al {nivel}%")
 
-@bot.tree.command(name="clear", description="Limpiar cola")
+@bot.tree.command(name="clear", description="Vacía la cola de reproducción")
 async def clear(interaction: discord.Interaction):
     bot.queue.clear()
-    await interaction.response.send_message("🗑️ Cola limpia.")
+    await interaction.response.send_message("🗑️ Cola vaciada.")
 
-@bot.tree.command(name="reconnect", description="Reiniciar conexión")
+@bot.tree.command(name="reconnect", description="Reinicia la conexión si el audio se corta")
 async def reconnect(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         await interaction.user.voice.channel.connect()
-        await interaction.response.send_message("🔄 Reiniciado.")
+        await interaction.response.send_message("🔄 Conexión de audio reiniciada.")
 
-@bot.tree.command(name="now", description="Info canción actual")
+@bot.tree.command(name="now", description="Muestra qué canción suena ahora")
 async def now(interaction: discord.Interaction):
-    await interaction.response.send_message("🔎 Comprobando canción actual...")
+    await interaction.response.send_message("🔎 Comprobando estado del reproductor...")
 
 bot.run(TOKEN)
