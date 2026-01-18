@@ -6,7 +6,7 @@ import asyncio
 import random
 
 # --- CONFIGURACIÓN DEL BOT ---
-TOKEN = "MTQ1OTMyNjM1ODI0ODIzMTExNQ.G4nDVE.5KpptanmjCKQS4O29wF0ha-2wB138xGuZOMxcg"
+TOKEN = "MTQ1OTMyNjM1ODI0ODIzMTExNQ.GBDm0q.X0Q-YZMPvLqofbnEIMVmLur6lecVcpFctHVekA"
 
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
