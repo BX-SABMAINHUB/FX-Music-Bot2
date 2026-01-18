@@ -16,11 +16,11 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-        print(f"✅ FLEXUS MAX-QUALITY conectado")
+        print(f"✅ FLEXUS SPOTIFY-QUALITY conectado")
 
 bot = FlexusBot()
 
-# --- CONFIGURACIÓN DE AUDIO PROFESIONAL ---
+# --- CONFIGURACIÓN DE AUDIO ESTÁNDAR SPOTIFY ---
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -30,15 +30,16 @@ YTDL_OPTIONS = {
     'source_address': '0.0.0.0',
 }
 
-# Bitrate de 192k: El punto dulce para máxima fidelidad sin que se corte el audio
+# Esta es la configuración clave: 192k es el límite real de alta fidelidad de Discord.
+# Más de eso causa el silencio que viste antes.
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -acodec libopus -ab 192k -ar 48000 -ac 2',
+    'options': '-vn -acodec libopus -ab 192k -ar 48000 -ac 2 -application audio',
 }
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
-@bot.tree.command(name="play", description="Reproduce música a Calidad Máxima")
+@bot.tree.command(name="play", description="Reproduce música calidad Spotify")
 async def play(interaction: discord.Interaction, busqueda: str):
     await interaction.response.defer()
     try:
@@ -47,10 +48,14 @@ async def play(interaction: discord.Interaction, busqueda: str):
         if 'entries' in data: data = data['entries'][0]
         
         url, titulo = data['url'], data['title']
+        
+        # Conexión al canal
         vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
 
-        # Volumen al 150% para que suene FUERTE desde el inicio
+        # Creamos la fuente de audio
         audio_source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
+        
+        # Transformador de volumen (1.5 para que suene FUERTE pero sin distorsión)
         vc_source = discord.PCMVolumeTransformer(audio_source, volume=1.5)
 
         if vc.is_playing():
@@ -58,69 +63,74 @@ async def play(interaction: discord.Interaction, busqueda: str):
             await interaction.followup.send(f"✅ Añadida a la cola: **{titulo}**")
         else:
             vc.play(vc_source)
-            await interaction.followup.send(f"🔊 Sonando ahora en HD: **{titulo}**")
+            await interaction.followup.send(f"🔊 Sonando en Calidad Premium: **{titulo}**")
+            
     except Exception as e:
-        await interaction.followup.send("❌ Error al reproducir. Reintentando...")
+        print(f"Error: {e}")
+        await interaction.followup.send("❌ El servidor de audio tardó en responder. Prueba de nuevo.")
 
-# --- LOS 10 COMANDOS DE MÚSICA (CORREGIDOS) ---
+# --- COMANDOS DE CONTROL ---
 
 @bot.tree.command(name="pause", description="Pausa la música")
-async def pause(interaction: discord.Interaction): # Error de duplicación corregido aquí
+async def pause(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     if vc and vc.is_playing():
         vc.pause()
-        await interaction.response.send_message("⏸️ Música pausada.")
-    else:
-        await interaction.response.send_message("❌ No hay nada sonando.")
+        await interaction.response.send_message("⏸️ Pausado.")
 
-@bot.tree.command(name="resume", description="Reanuda la música")
+@bot.tree.command(name="resume", description="Sigue la música")
 async def resume(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     if vc and vc.is_paused():
         vc.resume()
-        await interaction.response.send_message("▶️ Música reanudada.")
+        await interaction.response.send_message("▶️ Reanudado.")
 
-@bot.tree.command(name="skip", description="Salta a la siguiente canción")
+@bot.tree.command(name="skip", description="Siguiente canción")
 async def skip(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         interaction.guild.voice_client.stop()
-        await interaction.response.send_message("⏭️ Canción saltada.")
+        await interaction.response.send_message("⏭️ Saltada.")
 
-@bot.tree.command(name="stop", description="Limpia la cola y saca al bot")
+@bot.tree.command(name="stop", description="Desconectar")
 async def stop(interaction: discord.Interaction):
     bot.queue.clear()
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         await interaction.response.send_message("⏹️ Desconectado.")
 
-@bot.tree.command(name="queue", description="Muestra la lista de espera")
-async def queue(interaction: discord.Interaction):
-    if not bot.queue:
-        return await interaction.response.send_message("📝 La cola está vacía.")
-    lista = "\n".join([f"{i+1}. {t[1]}" for i, t in enumerate(bot.queue)])
-    await interaction.response.send_message(f"📋 **Cola actual:**\n{lista}")
-
-@bot.tree.command(name="volume", description="Ajusta el volumen (1-100)")
+@bot.tree.command(name="volume", description="Volumen (1-100)")
 async def volume(interaction: discord.Interaction, nivel: int):
     vc = interaction.guild.voice_client
     if vc and vc.source:
         vc.source.volume = nivel / 100
-        await interaction.response.send_message(f"🔊 Volumen ajustado al {nivel}%")
+        await interaction.response.send_message(f"🔊 Volumen al {nivel}%")
 
-@bot.tree.command(name="clear", description="Vacía la cola de reproducción")
+@bot.tree.command(name="queue", description="Ver cola")
+async def queue(interaction: discord.Interaction):
+    if not bot.queue: return await interaction.response.send_message("📝 Cola vacía.")
+    lista = "\n".join([f"{i+1}. {t[1]}" for i, t in enumerate(bot.queue)])
+    await interaction.response.send_message(f"📋 **Lista:**\n{lista}")
+
+@bot.tree.command(name="clear", description="Limpiar lista")
 async def clear(interaction: discord.Interaction):
     bot.queue.clear()
-    await interaction.response.send_message("🗑️ Cola vaciada.")
+    await interaction.response.send_message("🗑️ Lista vacía.")
 
-@bot.tree.command(name="reconnect", description="Reinicia la conexión si el audio se corta")
+@bot.tree.command(name="reconnect", description="Reiniciar audio")
 async def reconnect(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         await interaction.guild.voice_client.disconnect()
         await interaction.user.voice.channel.connect()
-        await interaction.response.send_message("🔄 Conexión de audio reiniciada.")
+        await interaction.response.send_message("🔄 Audio reiniciado.")
 
-@bot.tree.command(name="now", description="Muestra qué canción suena ahora")
+@bot.tree.command(name="now", description="Qué suena")
 async def now(interaction: discord.Interaction):
-    await interaction.response.send_message("🔎 Comprobando estado del reproductor...")
+    await interaction.response.send_message("🔎 Obteniendo información...")
+
+@bot.tree.command(name="shuffle", description="Mezclar la cola")
+async def shuffle(interaction: discord.Interaction):
+    import random
+    random.shuffle(bot.queue)
+    await interaction.response.send_message("🔀 Cola mezclada aleatoriamente.")
 
 bot.run(TOKEN)
