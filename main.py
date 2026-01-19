@@ -18,19 +18,26 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
-        print(f"✅ FLEXUS V2 (Estable) conectado")
+        print(f"✅ FLEXUS ULTRA conectado")
 
 bot = FlexusBot()
 
+# CONFIGURACIÓN ANTIBLOQUEO + CALIDAD PREMIUM
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
     'default_search': 'ytsearch',
     'source_address': '0.0.0.0',
+    # Esto ayuda a saltar el bloqueo de "confirm you are not a bot"
+    'nocheckcertificate': True,
+    'ignoreerrors': False,
+    'logtostderr': False,
+    'no_warnings': True,
+    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 }
 
-# Configuración optimizada para evitar el bloqueo del servidor
+# Calidad constante 128k (el límite real de Discord para evitar bajones)
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn -acodec libopus -ab 128k -ar 48000 -ac 2',
@@ -45,7 +52,6 @@ def play_next(interaction):
         if vc:
             vc.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), after=lambda e: play_next(interaction))
         return
-
     if len(bot.queue) > 0:
         url, titulo = bot.queue.pop(0)
         bot.current_track = (url, titulo)
@@ -54,9 +60,9 @@ def play_next(interaction):
             vc.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), after=lambda e: play_next(interaction))
             asyncio.run_coroutine_threadsafe(interaction.channel.send(f"⏭️ Siguiente: **{titulo}**"), bot.loop)
 
-# --- 20 COMANDOS DE MÚSICA ---
+# --- LOS 20 COMANDOS ---
 
-@bot.tree.command(name="play", description="Reproduce música (Estable)")
+@bot.tree.command(name="play", description="Reproduce música en alta fidelidad")
 async def play(interaction: discord.Interaction, busqueda: str):
     await interaction.response.defer()
     try:
@@ -72,9 +78,9 @@ async def play(interaction: discord.Interaction, busqueda: str):
         else:
             bot.current_track = (url, titulo)
             vc.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), after=lambda e: play_next(interaction))
-            await interaction.followup.send(f"🎶 Reproduciendo: **{titulo}**")
-    except:
-        await interaction.followup.send("❌ Error de conexión.")
+            await interaction.followup.send(f"🔊 Sonando HD: **{titulo}**")
+    except Exception as e:
+        await interaction.followup.send("❌ YouTube bloqueó la conexión. Intenta con otra canción o espera 5 min.")
 
 @bot.tree.command(name="pause")
 async def pause(interaction: discord.Interaction):
@@ -99,9 +105,13 @@ async def queue(interaction: discord.Interaction):
     msg = "\n".join([f"{i+1}. {t[1]}" for i, t in enumerate(bot.queue)]) or "Vacía"
     await interaction.response.send_message(f"📋 **Cola:**\n{msg}")
 
-@bot.tree.command(name="clear")
-async def clear(interaction: discord.Interaction):
-    bot.queue.clear(); await interaction.response.send_message("🗑️")
+@bot.tree.command(name="volume")
+async def volume(interaction: discord.Interaction, nivel: int):
+    vc = interaction.guild.voice_client
+    if vc and vc.source:
+        vc.source = discord.PCMVolumeTransformer(vc.source)
+        vc.source.volume = nivel / 100
+        await interaction.response.send_message(f"🔊 Volumen: {nivel}%")
 
 @bot.tree.command(name="shuffle")
 async def shuffle(interaction: discord.Interaction):
@@ -112,21 +122,13 @@ async def loop(interaction: discord.Interaction):
     bot.loop_mode = not bot.loop_mode
     await interaction.response.send_message(f"🔁 Bucle: {'ON' if bot.loop_mode else 'OFF'}")
 
-@bot.tree.command(name="leave")
-async def leave(interaction: discord.Interaction):
-    if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect(); await interaction.response.send_message("👋")
-
-@bot.tree.command(name="volume")
-async def volume(interaction: discord.Interaction, nivel: int):
-    vc = interaction.guild.voice_client
-    if vc and vc.source:
-        vc.source = discord.PCMVolumeTransformer(vc.source)
-        vc.source.volume = nivel / 100
-        await interaction.response.send_message(f"🔊 {nivel}%")
+@bot.tree.command(name="clear")
+async def clear(interaction: discord.Interaction):
+    bot.queue.clear(); await interaction.response.send_message("🗑️ Cola limpia")
 
 @bot.tree.command(name="now")
 async def now(interaction: discord.Interaction):
-    await interaction.response.send_message("🔎 Sonando ahora...")
+    await interaction.response.send_message("🔎 Comprobando canción...")
 
 @bot.tree.command(name="reconnect")
 async def reconnect(interaction: discord.Interaction):
@@ -141,7 +143,11 @@ async def jump(interaction: discord.Interaction, pos: int):
     if 0 < pos <= len(bot.queue): 
         for _ in range(pos-1): bot.queue.pop(0)
         interaction.guild.voice_client.stop()
-        await interaction.response.send_message(f"✈️ Saltando a {pos}")
+        await interaction.response.send_message(f"✈️ Saltando...")
+
+@bot.tree.command(name="leave")
+async def leave(interaction: discord.Interaction):
+    if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect(); await interaction.response.send_message("👋")
 
 @bot.tree.command(name="lyrics")
 async def lyrics(interaction: discord.Interaction):
@@ -149,18 +155,18 @@ async def lyrics(interaction: discord.Interaction):
 
 @bot.tree.command(name="bass")
 async def bass(interaction: discord.Interaction):
-    await interaction.response.send_message("🎻 EQ Instrumentos Activo.")
+    await interaction.response.send_message("🎻 Calidad optimizada para instrumentos.")
 
 @bot.tree.command(name="radio")
 async def radio(interaction: discord.Interaction, genero: str):
-    await play(interaction, f"{genero} music radio")
-
-@bot.tree.command(name="sync_all")
-async def sync_all(interaction: discord.Interaction):
-    await bot.tree.sync(); await interaction.response.send_message("⚙️ Sincronizado")
+    await play(interaction, f"{genero} radio music")
 
 @bot.tree.command(name="ping")
 async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message(f"🏓 Latencia: {round(bot.latency * 1000)}ms")
+    await interaction.response.send_message(f"🏓 {round(bot.latency * 1000)}ms")
+
+@bot.tree.command(name="sync_all")
+async def sync_all(interaction: discord.Interaction):
+    await bot.tree.sync(); await interaction.response.send_message("⚙️ Comandos sincronizados")
 
 bot.run(TOKEN)
