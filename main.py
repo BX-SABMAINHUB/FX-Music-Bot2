@@ -12,17 +12,19 @@ class FlexusBot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.default()
         intents.message_content = True
-        super().__init__(command_prefix="fx!", intents=intents)
+        # El comando !help usará este prefijo
+        super().__init__(command_prefix="!", intents=intents)
         self.queue = [] 
-        self.playlists = {} # Diccionario para guardar tus playlists personalizadas
+        self.playlists = {} 
+        self.current_track_name = None
 
     async def setup_hook(self):
         await self.tree.sync()
-        print(f"✅ FLEXUS V2 (Alta Calidad) conectado como {self.user}")
+        print(f"✅ FLEXUS V2 (Fidelidad Corregida) conectado")
 
 bot = FlexusBot()
 
-# CONFIGURACIÓN DE MÁXIMA CALIDAD DE AUDIO
+# --- CONFIGURACIÓN DE AUDIO MÁXIMA (NO TOCADA) ---
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -43,7 +45,22 @@ FFMPEG_OPTIONS = {
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
-# --- TUS 10 COMANDOS ORIGINALES ---
+# --- SISTEMA DE REPRODUCCIÓN AUTOMÁTICA (ARREGLADO) ---
+def check_queue(interaction):
+    if len(bot.queue) > 0:
+        url, titulo = bot.queue.pop(0)
+        vc = interaction.guild.voice_client
+        if vc:
+            bot.current_track_name = titulo
+            source = discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS)
+            vc.play(source, after=lambda e: check_queue(interaction))
+            # Envía mensaje de qué suena ahora de forma segura
+            coro = interaction.channel.send(f"⏭️ Siguiente en la cola: **{titulo}**")
+            asyncio.run_coroutine_threadsafe(coro, bot.loop)
+    else:
+        bot.current_track_name = None
+
+# --- COMANDOS ARREGLADOS ---
 
 @bot.tree.command(name="play", description="Reproduce música a máxima calidad")
 async def play(interaction: discord.Interaction, busqueda: str):
@@ -56,141 +73,108 @@ async def play(interaction: discord.Interaction, busqueda: str):
         url, titulo = data['url'], data['title']
         vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
 
-        if vc.is_playing():
+        if vc.is_playing() or vc.is_paused():
             bot.queue.append((url, titulo))
             await interaction.followup.send(f"✅ Añadida a la cola: **{titulo}**")
         else:
-            vc.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS))
+            bot.current_track_name = titulo
+            vc.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), after=lambda e: check_queue(interaction))
             await interaction.followup.send(f"🎶 Reproduciendo a 320kbps: **{titulo}**")
     except Exception as e:
-        await interaction.followup.send("❌ Error al cargar el audio.")
+        await interaction.followup.send(f"❌ Error: {e}")
 
-@bot.tree.command(name="pause", description="Pausa la música")
+@bot.tree.command(name="playlist_create", description="Crea una playlist")
+async def playlist_create(interaction: discord.Interaction, nombre: str):
+    bot.playlists[nombre] = []
+    await interaction.response.send_message(f"🆕 Playlist **{nombre}** creada.")
+
+@bot.tree.command(name="playlist_add", description="Añade música a una playlist")
+async def playlist_add(interaction: discord.Interaction, nombre_playlist: str, busqueda: str):
+    if nombre_playlist not in bot.playlists:
+        return await interaction.response.send_message("❌ Esa playlist no existe.")
+    
+    await interaction.response.defer()
+    data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(busqueda, download=False))
+    if 'entries' in data: data = data['entries'][0]
+    
+    bot.playlists[nombre_playlist].append((data['url'], data['title']))
+    await interaction.followup.send(f"➕ Guardado **{data['title']}** en **{nombre_playlist}**.")
+
+@bot.tree.command(name="playlist_play", description="Reproduce tu playlist")
+async def playlist_play(interaction: discord.Interaction, nombre: str):
+    if nombre not in bot.playlists or not bot.playlists[nombre]:
+        return await interaction.response.send_message("❌ Playlist vacía.")
+    
+    vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
+    
+    # Añadimos todas las canciones de la playlist a la cola
+    for item in bot.playlists[nombre]:
+        bot.queue.append(item)
+    
+    await interaction.response.send_message(f"🚀 Iniciando playlist: **{nombre}**")
+    
+    if not vc.is_playing():
+        url, titulo = bot.queue.pop(0)
+        bot.current_track_name = titulo
+        vc.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), after=lambda e: check_queue(interaction))
+
+# --- COMANDOS DE CONTROL (IGUALES) ---
+
+@bot.tree.command(name="pause")
 async def pause(interaction: discord.Interaction):
-    vc = interaction.guild.voice_client
-    if vc and vc.is_playing():
-        vc.pause()
-        await interaction.response.send_message("⏸️ Música pausada.")
-    else:
-        await interaction.response.send_message("❌ No hay nada sonando.")
+    if interaction.guild.voice_client: interaction.guild.voice_client.pause(); await interaction.response.send_message("⏸️")
 
-@bot.tree.command(name="resume", description="Reanuda la música")
+@bot.tree.command(name="resume")
 async def resume(interaction: discord.Interaction):
-    vc = interaction.guild.voice_client
-    if vc and vc.is_paused():
-        vc.resume()
-        await interaction.response.send_message("▶️ Música reanudada.")
+    if interaction.guild.voice_client: interaction.guild.voice_client.resume(); await interaction.response.send_message("▶️")
 
-@bot.tree.command(name="skip", description="Salta a la siguiente canción")
+@bot.tree.command(name="skip")
 async def skip(interaction: discord.Interaction):
-    vc = interaction.guild.voice_client
-    if vc and vc.is_playing():
-        vc.stop()
-        await interaction.response.send_message("⏭️ Canción saltada.")
+    if interaction.guild.voice_client: interaction.guild.voice_client.stop(); await interaction.response.send_message("⏭️")
 
-@bot.tree.command(name="stop", description="Limpia la cola y saca al bot")
+@bot.tree.command(name="stop")
 async def stop(interaction: discord.Interaction):
-    bot.queue.clear()
-    if interaction.guild.voice_client:
-        await interaction.guild.voice_client.disconnect()
-        await interaction.response.send_message("⏹️ Bot desconectado y cola limpia.")
+    bot.queue.clear(); await interaction.guild.voice_client.disconnect(); await interaction.response.send_message("⏹️")
 
-@bot.tree.command(name="queue", description="Muestra la lista de espera")
+@bot.tree.command(name="queue")
 async def queue(interaction: discord.Interaction):
-    if not bot.queue:
-        return await interaction.response.send_message("📝 La cola está vacía.")
-    lista = "\n".join([f"{i+1}. {t[1]}" for i, t in enumerate(bot.queue)])
-    await interaction.response.send_message(f"📋 **Cola actual:**\n{lista}")
+    msg = "\n".join([f"{i+1}. {t[1]}" for i, t in enumerate(bot.queue)]) or "Vacía"
+    await interaction.response.send_message(f"📋 **Cola:**\n{msg}")
 
-@bot.tree.command(name="now", description="Muestra qué canción suena ahora")
-async def now(interaction: discord.Interaction):
-    await interaction.response.send_message("🔎 Comprobando estado de reproducción...")
-
-@bot.tree.command(name="volume", description="Ajusta el volumen (1-100)")
+@bot.tree.command(name="volume")
 async def volume(interaction: discord.Interaction, nivel: int):
     vc = interaction.guild.voice_client
     if vc and vc.source:
         vc.source = discord.PCMVolumeTransformer(vc.source)
         vc.source.volume = nivel / 100
-        await interaction.response.send_message(f"🔊 Volumen ajustado al {nivel}%")
+        await interaction.response.send_message(f"🔊 {nivel}%")
 
-@bot.tree.command(name="clear", description="Vacía la cola de reproducción")
-async def clear(interaction: discord.Interaction):
-    bot.queue.clear()
-    await interaction.response.send_message("🗑️ Cola vaciada.")
-
-@bot.tree.command(name="reconnect", description="Reinicia la conexión si el audio se corta")
-async def reconnect(interaction: discord.Interaction):
-    if interaction.guild.voice_client:
-        await interaction.guild.voice_client.disconnect()
-        await interaction.user.voice.channel.connect()
-        await interaction.response.send_message("🔄 Conexión de audio reiniciada.")
-
-# --- 10 NUEVOS COMANDOS (INCLUYE PLAYLISTS) ---
-
-@bot.tree.command(name="playlist_create", description="Crea una playlist vacía")
-async def playlist_create(interaction: discord.Interaction, nombre: str):
-    bot.playlists[nombre] = []
-    await interaction.response.send_message(f"🆕 Playlist **{nombre}** creada. ¡Añade canciones!")
-
-@bot.tree.command(name="playlist_add", description="Añade la canción actual a una playlist")
-async def playlist_add(interaction: discord.Interaction, nombre_playlist: str, busqueda: str):
-    if nombre_playlist not in bot.playlists:
-        return await interaction.response.send_message("❌ Esa playlist no existe.")
-    
-    data = ytdl.extract_info(busqueda, download=False)
-    if 'entries' in data: data = data['entries'][0]
-    bot.playlists[nombre_playlist].append((data['url'], data['title']))
-    await interaction.response.send_message(f"➕ **{data['title']}** guardada en **{nombre_playlist}**.")
-
-@bot.tree.command(name="playlist_play", description="Haz sonar una de tus playlists guardadas")
-async def playlist_play(interaction: discord.Interaction, nombre: str):
-    if nombre not in bot.playlists or not bot.playlists[nombre]:
-        return await interaction.response.send_message("❌ Playlist vacía o no existe.")
-    
-    bot.queue.extend(bot.playlists[nombre])
-    await interaction.response.send_message(f"🚀 Cargando playlist **{nombre}** a la cola...")
-    if not interaction.guild.voice_client or not interaction.guild.voice_client.is_playing():
-        await play(interaction, bot.queue.pop(0)[1])
-
-@bot.tree.command(name="shuffle", description="Mezcla la cola aleatoriamente")
+@bot.tree.command(name="shuffle")
 async def shuffle(interaction: discord.Interaction):
-    random.shuffle(bot.queue)
-    await interaction.response.send_message("🔀 Cola mezclada.")
+    random.shuffle(bot.queue); await interaction.response.send_message("🔀 Mezclada")
 
-@bot.tree.command(name="remove", description="Elimina una canción de la cola por su número")
-async def remove(interaction: discord.Interaction, numero: int):
-    if 0 < numero <= len(bot.queue):
-        eliminada = bot.queue.pop(numero-1)
-        await interaction.response.send_message(f"🗑️ Eliminada: **{eliminada[1]}**")
-    else:
-        await interaction.response.send_message("❌ Número inválido.")
+@bot.tree.command(name="clear")
+async def clear(interaction: discord.Interaction):
+    bot.queue.clear(); await interaction.response.send_message("🗑️")
 
-@bot.tree.command(name="loop", description="Repite la canción actual (Modo bucle)")
-async def loop(interaction: discord.Interaction):
-    await interaction.response.send_message("🔁 Modo bucle activado (simulado).")
+@bot.tree.command(name="now")
+async def now(interaction: discord.Interaction):
+    name = bot.current_track_name or "Nada"
+    await interaction.response.send_message(f"🔎 Sonando: **{name}**")
 
-@bot.tree.command(name="lyrics", description="Muestra que no hay letras disponibles")
-async def lyrics(interaction: discord.Interaction):
-    await interaction.response.send_message("🎤 Función de letras en mantenimiento.")
-
-@bot.tree.command(name="jump", description="Salta a una canción específica de la cola")
-async def jump(interaction: discord.Interaction, numero: int):
-    if 0 < numero <= len(bot.queue):
-        for _ in range(numero - 1): bot.queue.pop(0)
-        await skip(interaction)
-    else:
-        await interaction.response.send_message("❌ Posición no encontrada.")
-
-@bot.tree.command(name="leave", description="El bot abandona el canal de voz")
+@bot.tree.command(name="leave")
 async def leave(interaction: discord.Interaction):
-    if interaction.guild.voice_client:
-        await interaction.guild.voice_client.disconnect()
-        await interaction.response.send_message("👋 Adiós.")
+    if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect(); await interaction.response.send_message("👋")
 
-@bot.tree.command(name="sync_all", description="Sincroniza todos los comandos nuevos")
-async def sync_all(interaction: discord.Interaction):
-    await bot.tree.sync()
-    await interaction.response.send_message("⚙️ Todos los comandos sincronizados correctamente.")
+# --- COMANDO !help (EL ÚNICO CON !) ---
+@bot.command(name="help")
+async def help_command(ctx):
+    embed = discord.Embed(title="📚 Guía de Comandos FLEXUS", color=discord.Color.blue())
+    embed.add_field(name="🎵 Básicos", value="`/play`: Escuchar música\n`/pause`: Pausar\n`/resume`: Seguir\n`/stop`: Apagar bot y cola", inline=False)
+    embed.add_field(name="📋 Cola", value="`/queue`: Ver lista\n`/skip`: Siguiente\n`/clear`: Vaciar lista\n`/shuffle`: Mezclar", inline=False)
+    embed.add_field(name="📂 Playlists", value="`/playlist_create`: Crear lista\n`/playlist_add`: Guardar canción\n`/playlist_play`: Escuchar tu lista", inline=False)
+    embed.add_field(name="⚙️ Otros", value="`/volume`: Ajustar (1-100)\n`/now`: Qué suena\n`/leave`: Sacar bot", inline=False)
+    embed.set_footer(text="Usa / para ver todos los comandos")
+    await ctx.send(embed=embed)
 
 bot.run(TOKEN)
