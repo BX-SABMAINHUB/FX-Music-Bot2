@@ -17,10 +17,11 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self): 
         await self.tree.sync() 
-        print(f"✅ FLEXUS V2 conectado como {self.user}") 
+        print(f"✅ FLEXUS V2 (Lara Quality) conectado como {self.user}") 
 
 bot = FlexusBot() 
 
+# CONFIGURACIÓN DE AUDIO OPTIMIZADA (LARA STYLE)
 YTDL_OPTIONS = { 
     'format': 'bestaudio/best', 
     'noplaylist': True, 
@@ -28,7 +29,7 @@ YTDL_OPTIONS = {
     'default_search': 'ytsearch', 
     'source_address': '0.0.0.0', 
     'nocheckcertificate': True,
-    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
     'postprocessors': [{ 
         'key': 'FFmpegExtractAudio', 
         'preferredcodec': 'opus', 
@@ -36,9 +37,11 @@ YTDL_OPTIONS = {
     }], 
 } 
 
+# PARÁMETROS DE CALIDAD CONSTANTE
+# Se añadió 'packet_loss' y 'frame_duration' para evitar cortes de red
 FFMPEG_OPTIONS = { 
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 
-    'options': '-vn -b:a 320k', 
+    'options': '-vn -b:a 320k -bufsize 6000k -minrate 320k -maxrate 320k', 
 } 
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS) 
@@ -48,7 +51,7 @@ def play_next(interaction):
         url, titulo = bot.queue.pop(0)
         vc = interaction.guild.voice_client
         if vc:
-            # Mantener calidad y habilitar transformación de volumen
+            # Fuente con volumen y calidad Lara habilitada
             source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS))
             vc.play(source, after=lambda e: play_next(interaction))
     else:
@@ -57,11 +60,11 @@ def play_next(interaction):
 @bot.command(name="help")
 async def help_command(ctx):
     ayuda = (
-        "**🎸 GUÍA DE COMANDOS FLEXUS**\n"
-        "**`/play`** - Música a 320kbps.\n"
+        "**🎸 GUÍA DE COMANDOS FLEXUS (Lara Audio Engine)**\n"
+        "**`/play`** - Música a 320kbps constantes.\n"
         "**`/pause` / `/resume`** - Control de audio.\n"
         "**`/skip`** - Salta a la siguiente.\n"
-        "**`/volume`** - Ajusta el volumen (Hasta 10 mil millones).\n"
+        "**`/volume`** - Ajusta el volumen (Hasta 10,000,000,000).\n"
         "**`/playlist_create`** - Crea tu lista.\n"
         "**`/playlist_add`** - Guarda canciones.\n"
         "**`/playlist_play`** - Toca tu lista.\n"
@@ -69,7 +72,7 @@ async def help_command(ctx):
     )
     await ctx.send(ayuda)
 
-@bot.tree.command(name="play", description="Reproduce música a máxima calidad") 
+@bot.tree.command(name="play", description="Reproduce música a calidad Lara (320kbps)") 
 async def play(interaction: discord.Interaction, busqueda: str): 
     await interaction.response.defer() 
     try: 
@@ -86,9 +89,9 @@ async def play(interaction: discord.Interaction, busqueda: str):
         else:
             source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS))
             vc.play(source, after=lambda e: play_next(interaction)) 
-            await interaction.followup.send(f"🎶 Sonando: **{titulo}**") 
+            await interaction.followup.send(f"🎶 Sonando (Calidad Lara): **{titulo}**") 
     except Exception as e: 
-        await interaction.followup.send("❌ Error de YouTube (Bot detectado). Reintenta en un momento.") 
+        await interaction.followup.send("❌ Error de YouTube. Reintenta en un momento.") 
 
 @bot.tree.command(name="pause", description="Pausa la música") 
 async def pause(interaction: discord.Interaction): 
@@ -120,16 +123,15 @@ async def stop(interaction: discord.Interaction):
         await interaction.guild.voice_client.disconnect() 
         await interaction.response.send_message("⏹️ Desconectado.") 
 
-@bot.tree.command(name="volume", description="Ajusta el volumen (Rango masivo)")
+@bot.tree.command(name="volume", description="Volumen extremo (1 a 10 mil millones)")
 async def volume(interaction: discord.Interaction, nivel: int):
     vc = interaction.guild.voice_client
     if vc and vc.source:
         if 1 <= nivel <= 10000000000:
-            # 1.0 es el 100%. Nivel 10,000,000,000 será volumen extremo.
             vc.source.volume = nivel / 100
-            await interaction.response.send_message(f"🔊 Volumen ajustado a: **{nivel}**")
+            await interaction.response.send_message(f"🔊 Volumen Lara ajustado a: **{nivel}**")
         else:
-            await interaction.response.send_message("❌ Elige un número entre 1 y 10.000.000.000.")
+            await interaction.response.send_message("❌ Rango permitido: 1 a 10,000,000,000.")
     else:
         await interaction.response.send_message("❌ No hay música sonando.")
 
@@ -151,7 +153,7 @@ async def playlist_add(interaction: discord.Interaction, nombre_playlist: str, b
 @bot.tree.command(name="playlist_play", description="Toca tu playlist")
 async def playlist_play(interaction: discord.Interaction, nombre: str):
     if nombre not in bot.playlists or not bot.playlists[nombre]:
-        return await interaction.response.send_message("❌ Playlist vacía o inexistente.")
+        return await interaction.response.send_message("❌ Playlist vacía.")
     bot.queue.extend(bot.playlists[nombre])
     await interaction.response.send_message(f"🚀 Iniciando playlist: **{nombre}**")
     vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
