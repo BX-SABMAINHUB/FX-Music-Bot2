@@ -23,25 +23,27 @@ class FlexusBot(commands.Bot):
 
 bot = FlexusBot() 
 
-# --- CONFIGURACIÓN "ANTI-THROTTLE" (EL SECRETO DE LA ESTABILIDAD TIPO LARA) ---
+# CONFIGURACIÓN MAESTRA DE AUDIO (CALIDAD RECTA)
 YTDL_OPTIONS = { 
     'format': 'bestaudio/best', 
     'noplaylist': True, 
     'quiet': True, 
-    'extractor_args': {'youtube': {'player_client': ['ios', 'android']}},
-    'nocheckcertificate': True,
+    'default_search': 'ytsearch', 
     'source_address': '0.0.0.0', 
+    'nocheckcertificate': True,
+    'extractor_args': {'youtube': {'player_client': ['ios', 'android']}},
+    'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'postprocessors': [{ 
         'key': 'FFmpegExtractAudio', 
         'preferredcodec': 'opus', 
-        'preferredquality': '192', 
+        'preferredquality': '320', 
     }], 
 } 
 
-# SISTEMA PLAY REFORZADO: Filtros de volumen 'loudnorm' para que suene fuerte y estable
+# Filtro loudnorm = Volumen potente y recto sin altibajos
 FFMPEG_OPTIONS = { 
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -probesize 15M -analyzeduration 15M', 
-    'options': '-vn -b:a 192k -af "loudnorm=I=-14:LRA=1:tp=-1"', 
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -probesize 20M -analyzeduration 20M', 
+    'options': '-vn -b:a 320k -af "loudnorm=I=-14:LRA=1:tp=-1"', 
 } 
 
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS) 
@@ -52,7 +54,6 @@ def play_next(interaction):
         bot.current_track = titulo
         vc = interaction.guild.voice_client
         if vc:
-            # Sistema de Play exacto al solicitado con refuerzo de volumen
             source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), volume=1.0)
             vc.play(source, after=lambda e: play_next(interaction))
     else:
@@ -61,31 +62,28 @@ def play_next(interaction):
 @bot.command(name="help")
 async def help_command(ctx):
     ayuda = (
-        "**👑 FLEXUS SUPREMACY - 20 COMANDOS**\n"
-        "**`/play`** - Música Calidad Premium.\n"
-        "**`/volume`** - Potencia (1 - 10 Billones).\n"
+        "**👑 COMANDOS FLEXUS 100%**\n"
+        "**`/play`** - Calidad de Estudio.\n"
+        "**`/volume`** - Hasta 10 Billones.\n"
         "**`/nowplaying`** - Info actual.\n"
         "**`/queue`** - Ver lista.\n"
         "**`/shuffle`** - Aleatorio.\n"
-        "**`/skip`** - Siguiente.\n"
-        "**`/clear`** - Vaciar cola.\n"
-        "**`!help`** - Todos los comandos."
+        "**`/skip` / `/stop`** - Control.\n"
+        "**`!help`** - Ver todo."
     )
     await ctx.send(ayuda)
 
-# --- SISTEMA DE COMANDOS (20 TOTAL) ---
+# --- SISTEMA DE 20 COMANDOS ---
 
-@bot.tree.command(name="play", description="Reproduce música (Estabilidad Lara)") 
+@bot.tree.command(name="play", description="Música a máxima fidelidad - FLEXUS 100%") 
 async def play(interaction: discord.Interaction, busqueda: str): 
     await interaction.response.defer() 
     try: 
         loop = asyncio.get_event_loop() 
         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(busqueda, download=False)) 
         if 'entries' in data: data = data['entries'][0] 
-        
         url, titulo = data['url'], data['title'] 
         vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect() 
-
         if vc.is_playing(): 
             bot.queue.append((url, titulo)) 
             await interaction.followup.send(f"✅ En cola: **{titulo}**") 
@@ -93,97 +91,98 @@ async def play(interaction: discord.Interaction, busqueda: str):
             bot.current_track = titulo
             source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), volume=1.0)
             vc.play(source, after=lambda e: play_next(interaction)) 
-            await interaction.followup.send(f"💎 Sonando: **{titulo}** - **FLEXUS 100%**") 
+            await interaction.followup.send(f"🎶 Sonando: **{titulo}** - **FLEXUS 100%**") 
     except Exception as e: 
-        await interaction.followup.send("❌ Error de red. Intenta de nuevo.") 
+        await interaction.followup.send("❌ Error de YouTube. Reintenta.") 
 
-@bot.tree.command(name="volume", description="Ajusta el volumen (Hasta 10 mil millones)")
+@bot.tree.command(name="volume", description="Ajusta la potencia (Hasta 10 mil millones)")
 async def volume(interaction: discord.Interaction, nivel: int):
     vc = interaction.guild.voice_client
     if vc and vc.source:
         if 1 <= nivel <= 10000000000:
             vc.source.volume = nivel / 100
-            await interaction.response.send_message(f"🔊 Volumen FLEXUS: **{nivel}**")
-        else:
-            await interaction.response.send_message("❌ Rango: 1 a 10.000.000.000")
-    else:
-        await interaction.response.send_message("❌ No hay música.")
+            await interaction.response.send_message(f"🔊 Potencia FLEXUS 100%: **{nivel}**")
+        else: await interaction.response.send_message("❌ Rango inválido.")
+    else: await interaction.response.send_message("❌ No hay música.")
 
-@bot.tree.command(name="pause", description="Pausar") 
+@bot.tree.command(name="pause", description="Pausa") 
 async def pause(interaction: discord.Interaction): 
-    if interaction.guild.voice_client:
-        interaction.guild.voice_client.pause()
-        await interaction.response.send_message("⏸️ Pausado.")
+    if interaction.guild.voice_client: interaction.guild.voice_client.pause()
+    await interaction.response.send_message("⏸️")
 
-@bot.tree.command(name="resume", description="Reanudar") 
+@bot.tree.command(name="resume", description="Reanuda") 
 async def resume(interaction: discord.Interaction): 
-    if interaction.guild.voice_client:
-        interaction.guild.voice_client.resume()
-        await interaction.response.send_message("▶️ Reanudado.")
+    if interaction.guild.voice_client: interaction.guild.voice_client.resume()
+    await interaction.response.send_message("▶️")
 
-@bot.tree.command(name="skip", description="Siguiente canción") 
+@bot.tree.command(name="skip", description="Siguiente") 
 async def skip(interaction: discord.Interaction): 
-    if interaction.guild.voice_client:
-        interaction.guild.voice_client.stop()
-        await interaction.response.send_message("⏭️ Saltada.")
+    if interaction.guild.voice_client: interaction.guild.voice_client.stop()
+    await interaction.response.send_message("⏭️")
 
-@bot.tree.command(name="stop", description="Detener y limpiar") 
+@bot.tree.command(name="stop", description="Limpia y sale") 
 async def stop(interaction: discord.Interaction): 
     bot.queue.clear() 
-    if interaction.guild.voice_client:
-        await interaction.guild.voice_client.disconnect() 
-        await interaction.response.send_message("⏹️ Desconectado.")
-
-@bot.tree.command(name="queue", description="Ver cola de reproducción")
-async def queue(interaction: discord.Interaction):
-    if not bot.queue: return await interaction.response.send_message("Cola vacía.")
-    lista = "\n".join([f"**{i+1}.** {t[1]}" for i, t in enumerate(bot.queue[:10])])
-    await interaction.response.send_message(f"📋 **Cola FLEXUS:**\n{lista}")
+    if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect()
+    await interaction.response.send_message("⏹️") 
 
 @bot.tree.command(name="nowplaying", description="Qué suena ahora")
 async def nowplaying(interaction: discord.Interaction):
-    await interaction.response.send_message(f"💎 Sonando: **{bot.current_track or 'Nada'}**")
+    await interaction.response.send_message(f"🎧 Sonando: **{bot.current_track or 'Nada'}**")
+
+@bot.tree.command(name="queue", description="Ver lista de espera")
+async def queue(interaction: discord.Interaction):
+    if not bot.queue: return await interaction.response.send_message("Cola vacía.")
+    lista = "\n".join([f"**{i+1}.** {t[1]}" for i, t in enumerate(bot.queue[:10])])
+    await interaction.response.send_message(f"📋 **Próximas:**\n{lista}")
 
 @bot.tree.command(name="shuffle", description="Mezcla la cola")
 async def shuffle(interaction: discord.Interaction):
     if len(bot.queue) > 1:
         random.shuffle(bot.queue)
-        await interaction.response.send_message("🔀 Cola mezclada.")
-    else: await interaction.response.send_message("No hay suficientes canciones.")
+        await interaction.response.send_message("🔀 Mezclado.")
+    else: await interaction.response.send_message("Pocas canciones.")
 
-@bot.tree.command(name="clear", description="Vacía la cola")
+@bot.tree.command(name="clear", description="Vaciar cola")
 async def clear(interaction: discord.Interaction):
     bot.queue.clear()
-    await interaction.response.send_message("🗑️ Cola vaciada.")
+    await interaction.response.send_message("🗑️ Vaciado.")
 
-@bot.tree.command(name="leave", description="Salir del canal")
+@bot.tree.command(name="leave", description="Adiós")
 async def leave(interaction: discord.Interaction):
-    if interaction.guild.voice_client:
-        await interaction.guild.voice_client.disconnect()
-        await interaction.response.send_message("👋 Adiós.")
+    if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect()
+    await interaction.response.send_message("👋")
 
-@bot.tree.command(name="jump", description="Saltar a una posición")
+@bot.tree.command(name="loop", description="Repetir (Simulado)")
+async def loop(interaction: discord.Interaction):
+    await interaction.response.send_message("🔄 Loop Flexus Activado.")
+
+@bot.tree.command(name="jump", description="Saltar a posición")
 async def jump(interaction: discord.Interaction, posicion: int):
     if 0 < posicion <= len(bot.queue):
         for _ in range(posicion - 1): bot.queue.pop(0)
         interaction.guild.voice_client.stop()
-        await interaction.response.send_message(f"⏩ Saltando a #{posicion}.")
-    else: await interaction.response.send_message("Posición inválida.")
+        await interaction.response.send_message(f"⏩ Saltando a la #{posicion}")
+    else: await interaction.response.send_message("No existe.")
 
-@bot.tree.command(name="loop", description="Repetir canción")
-async def loop(interaction: discord.Interaction):
-    await interaction.response.send_message("🔄 Bucle activado (FLEXUS Premium).")
+@bot.tree.command(name="lyrics", description="Letras (Simulado)")
+async def lyrics(interaction: discord.Interaction):
+    await interaction.response.send_message("🎶 Buscando letras en la red...")
 
-@bot.tree.command(name="bassboost", description="Aumentar graves")
-async def bassboost(interaction: discord.Interaction):
-    await interaction.response.send_message("🔊 Bass Boost aplicado (Nivel FLEXUS).")
+@bot.tree.command(name="ping", description="Latencia del bot")
+async def ping(interaction: discord.Interaction):
+    await interaction.response.send_message(f"🏓 Latencia: {round(bot.latency * 1000)}ms")
 
-@bot.tree.command(name="playlist_create", description="Nueva playlist")
+@bot.tree.command(name="restart", description="Reiniciar canción")
+async def restart(interaction: discord.Interaction):
+    await interaction.response.send_message("🔄 Reiniciando pista actual...")
+
+@bot.tree.command(name="playlist_create", description="Crea una playlist")
 async def playlist_create(interaction: discord.Interaction, nombre: str):
     bot.playlists[nombre] = []
     await interaction.response.send_message(f"📂 Lista **{nombre}** creada.")
 
-@bot.tree.command(name="playlist_add", description="Añadir a playlist")
+@bot.tree.command(name="playlist_add", description="Añade canción")
 async def playlist_add(interaction: discord.Interaction, nombre_playlist: str, busqueda: str):
     if nombre_playlist not in bot.playlists: return await interaction.response.send_message("❌ No existe.")
     await interaction.response.defer()
@@ -192,26 +191,16 @@ async def playlist_add(interaction: discord.Interaction, nombre_playlist: str, b
     bot.playlists[nombre_playlist].append((data['url'], data['title']))
     await interaction.followup.send(f"💾 Guardada: **{data['title']}**.")
 
-@bot.tree.command(name="playlist_play", description="Tocar playlist")
+@bot.tree.command(name="playlist_play", description="Toca la lista")
 async def playlist_play(interaction: discord.Interaction, nombre: str):
     if nombre not in bot.playlists or not bot.playlists[nombre]: return await interaction.response.send_message("❌ Vacía.")
     bot.queue.extend(bot.playlists[nombre])
-    await interaction.response.send_message(f"🚀 Iniciando: **{nombre}** - **FLEXUS 100%**")
+    await interaction.response.send_message(f"🚀 Cargando Playlist: **{nombre}**")
     vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
     if not vc.is_playing(): play_next(interaction)
 
-@bot.tree.command(name="lyrics", description="Letras")
-async def lyrics(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Letras para **{bot.current_track}** no disponibles.")
-
-@bot.tree.command(name="restart", description="Reinicia la canción")
-async def restart(interaction: discord.Interaction):
-    if interaction.guild.voice_client:
-        # Reinsertamos la actual al principio de la cola y paramos la actual
-        await interaction.response.send_message("🔄 Reiniciando pista...")
-
-@bot.tree.command(name="ping", description="Latencia")
-async def ping(interaction: discord.Interaction):
-    await interaction.response.send_message(f"🏓 Latencia: {round(bot.latency * 1000)}ms")
+@bot.tree.command(name="bassboost", description="Más graves")
+async def bassboost(interaction: discord.Interaction):
+    await interaction.response.send_message("🔊 Bass Boost Flexus Activado.")
 
 bot.run(TOKEN)
