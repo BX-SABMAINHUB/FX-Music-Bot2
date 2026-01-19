@@ -11,7 +11,6 @@ class FlexusBot(commands.Bot):
     def __init__(self): 
         intents = discord.Intents.default() 
         intents.message_content = True 
-        # SOLUCIÓN AL CRASH: Eliminamos el comando help por defecto
         super().__init__(command_prefix="!", intents=intents, help_command=None) 
         self.queue = [] 
         self.playlists = {} 
@@ -22,7 +21,6 @@ class FlexusBot(commands.Bot):
 
 bot = FlexusBot() 
 
-# CONFIGURACIÓN DE AUDIO (MANTENIENDO TU CALIDAD DE 320K)
 YTDL_OPTIONS = { 
     'format': 'bestaudio/best', 
     'noplaylist': True, 
@@ -50,13 +48,12 @@ def play_next(interaction):
         url, titulo = bot.queue.pop(0)
         vc = interaction.guild.voice_client
         if vc:
-            # Mantener la calidad en cada canción de la cola
+            # Mantener calidad y habilitar transformación de volumen
             source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS))
             vc.play(source, after=lambda e: play_next(interaction))
     else:
         print("Cola finalizada.")
 
-# --- COMANDO !help ---
 @bot.command(name="help")
 async def help_command(ctx):
     ayuda = (
@@ -64,15 +61,13 @@ async def help_command(ctx):
         "**`/play`** - Música a 320kbps.\n"
         "**`/pause` / `/resume`** - Control de audio.\n"
         "**`/skip`** - Salta a la siguiente.\n"
-        "**`/volume`** - Ajusta el volumen (Hasta 10,000,000,000).\n"
+        "**`/volume`** - Ajusta el volumen (Hasta 10 mil millones).\n"
         "**`/playlist_create`** - Crea tu lista.\n"
         "**`/playlist_add`** - Guarda canciones.\n"
         "**`/playlist_play`** - Toca tu lista.\n"
         "**`!help`** - Ver este menú."
     )
     await ctx.send(ayuda)
-
-# --- COMANDOS SLASH ---
 
 @bot.tree.command(name="play", description="Reproduce música a máxima calidad") 
 async def play(interaction: discord.Interaction, busqueda: str): 
@@ -91,22 +86,9 @@ async def play(interaction: discord.Interaction, busqueda: str):
         else:
             source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS))
             vc.play(source, after=lambda e: play_next(interaction)) 
-            await interaction.followup.send(f"🎶 Sonando a 320kbps: **{titulo}**") 
+            await interaction.followup.send(f"🎶 Sonando: **{titulo}**") 
     except Exception as e: 
-        await interaction.followup.send("❌ Error de YouTube. Reintenta en un momento.") 
-
-@bot.tree.command(name="volume", description="Ajusta el volumen (1 a 10,000,000,000)")
-async def volume(interaction: discord.Interaction, nivel: float):
-    vc = interaction.guild.voice_client
-    if vc and vc.source:
-        if 1 <= nivel <= 10000000000:
-            # Convertimos el nivel a la escala de Discord (1.0 = 100%)
-            vc.source.volume = nivel / 100
-            await interaction.response.send_message(f"🔊 Volumen brutal ajustado a: **{nivel}**")
-        else:
-            await interaction.response.send_message("❌ Elige un número entre 1 y 10,000,000,000.")
-    else:
-        await interaction.response.send_message("❌ No hay nada sonando.")
+        await interaction.followup.send("❌ Error de YouTube (Bot detectado). Reintenta en un momento.") 
 
 @bot.tree.command(name="pause", description="Pausa la música") 
 async def pause(interaction: discord.Interaction): 
@@ -114,6 +96,8 @@ async def pause(interaction: discord.Interaction):
     if vc and vc.is_playing(): 
         vc.pause() 
         await interaction.response.send_message("⏸️ Pausada.") 
+    else: 
+        await interaction.response.send_message("❌ No hay nada sonando.") 
 
 @bot.tree.command(name="resume", description="Reanuda la música") 
 async def resume(interaction: discord.Interaction): 
@@ -136,6 +120,19 @@ async def stop(interaction: discord.Interaction):
         await interaction.guild.voice_client.disconnect() 
         await interaction.response.send_message("⏹️ Desconectado.") 
 
+@bot.tree.command(name="volume", description="Ajusta el volumen (Rango masivo)")
+async def volume(interaction: discord.Interaction, nivel: int):
+    vc = interaction.guild.voice_client
+    if vc and vc.source:
+        if 1 <= nivel <= 10000000000:
+            # 1.0 es el 100%. Nivel 10,000,000,000 será volumen extremo.
+            vc.source.volume = nivel / 100
+            await interaction.response.send_message(f"🔊 Volumen ajustado a: **{nivel}**")
+        else:
+            await interaction.response.send_message("❌ Elige un número entre 1 y 10.000.000.000.")
+    else:
+        await interaction.response.send_message("❌ No hay música sonando.")
+
 @bot.tree.command(name="playlist_create", description="Crea una playlist")
 async def playlist_create(interaction: discord.Interaction, nombre: str):
     bot.playlists[nombre] = []
@@ -145,22 +142,18 @@ async def playlist_create(interaction: discord.Interaction, nombre: str):
 async def playlist_add(interaction: discord.Interaction, nombre_playlist: str, busqueda: str):
     if nombre_playlist not in bot.playlists:
         return await interaction.response.send_message("❌ Esa playlist no existe.")
-    
     await interaction.response.defer()
     data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(busqueda, download=False))
     if 'entries' in data: data = data['entries'][0]
-    
     bot.playlists[nombre_playlist].append((data['url'], data['title']))
-    await interaction.followup.send(f"💾 Guardada en **{nombre_playlist}**.")
+    await interaction.followup.send(f"💾 Guardada: **{data['title']}** en **{nombre_playlist}**.")
 
 @bot.tree.command(name="playlist_play", description="Toca tu playlist")
 async def playlist_play(interaction: discord.Interaction, nombre: str):
     if nombre not in bot.playlists or not bot.playlists[nombre]:
-        return await interaction.response.send_message("❌ Playlist vacía.")
-    
+        return await interaction.response.send_message("❌ Playlist vacía o inexistente.")
     bot.queue.extend(bot.playlists[nombre])
-    await interaction.response.send_message(f"🚀 Iniciando: **{nombre}**")
-    
+    await interaction.response.send_message(f"🚀 Iniciando playlist: **{nombre}**")
     vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
     if not vc.is_playing():
         play_next(interaction)
