@@ -63,6 +63,7 @@ async def help_command(ctx):
         "**`/play`** - Música a 320kbps.\n"
         "**`/pause` / `/resume`** - Control de audio.\n"
         "**`/skip`** - Salta a la siguiente.\n"
+        "**`/volume`** - Ajusta el volumen (1 a 100,000).\n"
         "**`/playlist_create`** - Crea tu lista.\n"
         "**`/playlist_add`** - Guarda canciones.\n"
         "**`/playlist_play`** - Toca tu lista.\n"
@@ -121,6 +122,22 @@ async def stop(interaction: discord.Interaction):
     if interaction.guild.voice_client: 
         await interaction.guild.voice_client.disconnect() 
         await interaction.response.send_message("⏹️ Desconectado.") 
+
+# --- COMANDO DE VOLUMEN AÑADIDO ---
+@bot.tree.command(name="volume", description="Ajusta el volumen de 1 a 100,000")
+async def volume(interaction: discord.Interaction, nivel: int):
+    vc = interaction.guild.voice_client
+    if vc and vc.source:
+        # Limitamos el rango según tu petición
+        if 1 <= nivel <= 100000:
+            # Discord usa una escala donde 1.0 es 100%, así que dividimos por 100
+            vc.source = discord.PCMVolumeTransformer(vc.source)
+            vc.source.volume = nivel / 100
+            await interaction.response.send_message(f"🔊 Volumen ajustado a: **{nivel}**")
+        else:
+            await interaction.response.send_message("❌ Por favor elige un número entre 1 y 100,000.")
+    else:
+        await interaction.response.send_message("❌ No hay música sonando para ajustar el volumen.")
 
 @bot.tree.command(name="playlist_create", description="Crea una playlist")
 async def playlist_create(interaction: discord.Interaction, nombre: str):
