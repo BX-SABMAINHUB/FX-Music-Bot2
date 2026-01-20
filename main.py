@@ -7,7 +7,7 @@ import os
 import random
 
 TOKEN = os.getenv("DISCORD_TOKEN") 
-
+MONGO_URL = "mongodb+srv://Alexgaming:Alex27Junio@cluster0.55a5siw.mongodb.net/?appName=Cluster0"
 class FlexusBot(commands.Bot): 
     def __init__(self): 
         intents = discord.Intents.default() 
