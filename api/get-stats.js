@@ -1,22 +1,28 @@
 const { MongoClient } = require('mongodb');
 
 const uri = "mongodb+srv://Alexgaming:Alex27Junio@cluster0.55a5siw.mongodb.net/?retryWrites=true&w=majority";
+let cachedDb = null;
+
+async function connectToDatabase() {
+    if (cachedDb) return cachedDb;
+    const client = await MongoClient.connect(uri);
+    const db = client.db("flexus_data");
+    cachedDb = db;
+    return db;
+}
 
 export default async function handler(req, res) {
-    // Esto evita que el navegador guarde el número viejo
+    // IMPORTANTE: Permitir que cualquier web lo lea
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-store, max-age=0');
-    
-    const client = new MongoClient(uri);
+
     try {
-        await client.connect();
-        const db = client.db("flexus_data");
+        const db = await connectToDatabase();
         const stats = await db.collection("ads_stats").findOne({ id: "global" });
         
-        // Si no existe el dato, enviamos 0
         res.status(200).json({ views: stats ? stats.views : 0 });
-    } catch (e) {
-        res.status(500).json({ error: e.message });
-    } finally {
-        await client.close();
+    } catch (error) {
+        console.error("Error en MongoDB:", error);
+        res.status(500).json({ error: "Fallo al conectar con la base de datos" });
     }
 }
