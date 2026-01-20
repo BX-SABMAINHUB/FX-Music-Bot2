@@ -1,30 +1,34 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>FLEXUS ADS LIVE</title>
+    <meta charset="UTF-8">
+    <title>FLEXUS ADS | Live Panel</title>
     <style>
-        body { background: #000; color: #00ff88; font-family: sans-serif; text-align: center; padding-top: 100px; }
-        .contador { font-size: 150px; font-weight: bold; color: white; text-shadow: 0 0 20px #00ff88; }
+        body { background: #000; color: #00ff88; font-family: 'Arial', sans-serif; text-align: center; padding-top: 100px; }
+        .contador { font-size: 150px; font-weight: bold; color: white; text-shadow: 0 0 30px #00ff88; }
+        .texto { font-size: 20px; color: #888; letter-spacing: 3px; }
     </style>
 </head>
 <body>
-    <h1>FLEXUS PREMIUM ADS</h1>
-    <div class="contador" id="real-vistas">0</div>
-    <p>VISITAS REALES DESDE MONGODB</p>
+    <div style="letter-spacing: 10px; margin-bottom: 20px;">FLEXUS PREMIUM</div>
+    <div class="contador" id="real-views">0</div>
+    <div class="texto">AUDIENCIA DE ANUNCIOS EN VIVO</div>
 
     <script>
-        async function actualizar() {
+        async function updateStats() {
             try {
-                // Llama a la función que conecta con tu MongoDB
-                const respuesta = await fetch('/api/get-stats');
-                const datos = await respuesta.json();
-                document.getElementById('real-vistas').innerText = datos.views || 0;
-            } catch (error) {
-                console.log("Esperando datos...");
+                // Consultamos a nuestra API real
+                const response = await fetch('/api/get-stats');
+                const data = await response.json();
+                // Actualizamos el número en pantalla
+                document.getElementById('real-views').innerText = data.views;
+            } catch (err) {
+                console.log("Conectando con base de datos...");
             }
         }
-        setInterval(actualizar, 3000); // Se actualiza cada 3 segundos
-        actualizar();
+        // Se actualiza cada 5 segundos para que veas el cambio en vivo
+        setInterval(updateStats, 5000);
+        updateStats();
     </script>
 </body>
 </html>
