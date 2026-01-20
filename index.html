@@ -2,33 +2,43 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FLEXUS ADS | Live Panel</title>
     <style>
-        body { background: #000; color: #00ff88; font-family: 'Arial', sans-serif; text-align: center; padding-top: 100px; }
-        .contador { font-size: 150px; font-weight: bold; color: white; text-shadow: 0 0 30px #00ff88; }
-        .texto { font-size: 20px; color: #888; letter-spacing: 3px; }
+        body { background: #000; color: #00ff88; font-family: 'Arial', sans-serif; text-align: center; padding-top: 100px; margin: 0; }
+        .contador { font-size: 150px; font-weight: bold; color: white; text-shadow: 0 0 30px #00ff88; transition: all 0.5s ease; }
+        .texto { font-size: 20px; color: #888; letter-spacing: 3px; font-weight: bold; }
+        .logo { letter-spacing: 10px; margin-bottom: 20px; font-size: 25px; color: #00ff88; }
     </style>
 </head>
 <body>
-    <div style="letter-spacing: 10px; margin-bottom: 20px;">FLEXUS PREMIUM</div>
-    <div class="contador" id="real-views">0</div>
-    <div class="texto">AUDIENCIA DE ANUNCIOS EN VIVO</div>
+    <div class="logo">FLEXUS PREMIUM</div>
+    <div class="contador" id="real-views">...</div>
+    <div class="texto">AUDIENCIA TOTAL DE ANUNCIOS</div>
 
     <script>
         async function updateStats() {
             try {
-                // Consultamos a nuestra API real
-                const response = await fetch('/api/get-stats');
+                // Añadimos un timestamp para forzar a Vercel a pedir el dato nuevo cada vez
+                const response = await fetch('/api/get-stats?t=' + Date.now());
+                if (!response.ok) throw new Error('Error en la API');
+                
                 const data = await response.json();
-                // Actualizamos el número en pantalla
-                document.getElementById('real-views').innerText = data.views;
+                const display = document.getElementById('real-views');
+                
+                // Si el número cambió, lo actualizamos
+                if (display.innerText !== data.views.toString()) {
+                    display.innerText = data.views;
+                }
             } catch (err) {
-                console.log("Conectando con base de datos...");
+                console.error("Error cargando estadísticas:", err);
+                document.getElementById('real-views').innerText = "ERR";
             }
         }
-        // Se actualiza cada 5 segundos para que veas el cambio en vivo
-        setInterval(updateStats, 5000);
-        updateStats();
+
+        // Actualiza cada 3 segundos para que sea casi en tiempo real
+        setInterval(updateStats, 3000);
+        updateStats(); // Carga inicial
     </script>
 </body>
 </html>
