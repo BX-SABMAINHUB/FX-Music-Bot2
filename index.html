@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>FLEXUS ADS | Panel en Vivo</title>
+    <style>
+        body { background: #000; color: #00ff88; font-family: 'Arial', sans-serif; text-align: center; padding-top: 100px; }
+        .contador { font-size: 120px; font-weight: bold; color: white; text-shadow: 0 0 20px #00ff88; }
+        .logo { font-size: 24px; letter-spacing: 10px; margin-bottom: 20px; }
+        .vistas { color: #888; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <div class="logo">FLEXUS PREMIUM</div>
+    <div class="contador" id="vistas">0</div>
+    <div class="vistas">ANUNCIOS ESCUCHADOS EN DIRECTO</div>
+
+    <script>
+        // Este código hará que el número suba solo cuando el bot ponga el anuncio
+        async function actualizarVistas() {
+            // Simulador mientras conectamos la API real de tu MongoDB
+            let current = parseInt(document.getElementById('vistas').innerText);
+            document.getElementById('vistas').innerText = current + Math.floor(Math.random() * 2);
+        }
+        setInterval(actualizarVistas, 5000);
+    </script>
+</body>
+</html>
