@@ -25,30 +25,31 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self): 
         await self.tree.sync() 
-        print(f"🚀 FLEXUS V3 ULTRA: VELOCIDAD Y CALIDAD ACTIVADAS") 
+        print(f"✅ FLEXUS V3.1: SISTEMA ESTABILIZADO Y LISTO") 
 
 bot = FlexusBot() 
 
-# CONFIGURACIÓN YTDL OPTIMIZADA (SÚPER RÁPIDA)
+# CONFIGURACIÓN YTDL (MODO VELOCIDAD + SEGURIDAD)
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
-    'extract_flat': True, # <--- ESTO HACE QUE LA BÚSQUEDA SEA INSTANTÁNEA
+    'extract_flat': True, # Velocidad extrema para buscar
     'default_search': 'ytsearch5',
     'headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'}
 } 
 
-# CONFIGURACIÓN FFMPEG (CALIDAD DE SONIDO ESTABLE)
+# CONFIGURACIÓN FFMPEG (AUDIO HD)
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -b:a 192k' # <--- FORZAR CALIDAD DE AUDIO
+    'options': '-vn -b:a 192k' # Forzamos calidad de audio
 }
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
-# --- LÓGICA DE AUDIO ---
+# --- LÓGICA DE AUDIO Y ANUNCIOS ---
 
 async def registrar_anuncio(guild):
+    """Registra visitas en MongoDB para Vercel"""
     if guild.voice_client and guild.voice_client.channel:
         oyentes = len(guild.voice_client.channel.members) - 1
         await stats_col.update_one({"id": "global"}, {"$inc": {"views": max(0, oyentes)}}, upsert=True)
@@ -57,12 +58,13 @@ def play_next(interaction):
     if not interaction.guild.voice_client: return
     canal = interaction.guild.voice_client.channel
     
-    # Detección VIP
+    # Detección VIP (Si hay un VIP, es_vip = True)
     es_vip = any(any(r.name == "VIP" for r in m.roles) for m in canal.members)
 
     # Lógica de Anuncios (Cada 3 canciones)
     if bot.songs_played >= 3:
         bot.songs_played = 0
+        # Solo suena si NO hay VIPs y existe el archivo
         if not es_vip and os.path.exists("anuncio.mp3"):
             print("📢 Reproduciendo publicidad...")
             source = discord.FFmpegPCMAudio("anuncio.mp3")
@@ -70,8 +72,9 @@ def play_next(interaction):
             asyncio.run_coroutine_threadsafe(registrar_anuncio(interaction.guild), bot.loop)
             return
         elif es_vip:
-            print("💎 VIP Detectado: Anuncio saltado.")
+            print("💎 VIP Detectado: Saltando publicidad.")
 
+    # Reproducción de la cola
     if len(bot.queue) > 0:
         url, titulo = bot.queue.pop(0)
         bot.songs_played += 1
@@ -81,50 +84,55 @@ def play_next(interaction):
     else:
         bot.current_track = None
 
-# --- INTERFAZ MODERNA (EMBEDS Y BOTONES) ---
+# --- INTERFAZ MODERNA (MENU DE SELECCIÓN) ---
 
 class SongSelect(ui.Select):
     def __init__(self, options_data):
-        # Creamos las opciones con Emojis
-        options = [
-            discord.SelectOption(
-                label=d['title'][:90], 
+        # Creamos el menú desplegable
+        options = []
+        for i, d in enumerate(options_data):
+            # Aseguramos que haya título y url
+            title = d.get('title', 'Canción desconocida')[:90]
+            uploader = d.get('uploader', 'YouTube')
+            options.append(discord.SelectOption(
+                label=title, 
                 emoji="🎵", 
-                description=f"Canal: {d.get('uploader', 'Desconocido')}", 
+                description=f"Canal: {uploader}", 
                 value=str(i)
-            ) for i, d in enumerate(options_data)
-        ]
+            ))
+            
         super().__init__(placeholder="🔥 Selecciona tu temazo aquí...", options=options)
         self.options_data = options_data
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         
-        # Obtenemos datos básicos
+        # Recuperamos la elección
         selected_index = int(self.values[0])
         selected_data = self.options_data[selected_index]
+        video_url = selected_data.get('url') or selected_data.get('webpage_url')
         
-        # PROCESO DE CARGA (Ahora procesamos solo la elegida para máxima calidad)
-        info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(selected_data['url'], download=False))
-        url = info['url']
+        # AHORA procesamos el audio real (Alta Calidad)
+        info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(video_url, download=False))
+        real_url = info['url']
         titulo = info['title']
         img_url = info.get('thumbnail', None)
         
         vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
         
-        # Diseño del Embed de confirmación
+        # Embed de confirmación
         embed = discord.Embed(title=f"💿 {titulo}", color=discord.Color.green())
         if img_url: embed.set_thumbnail(url=img_url)
         embed.set_footer(text="Flexus Premium Audio System")
 
         if vc.is_playing():
-            bot.queue.append((url, titulo))
+            bot.queue.append((real_url, titulo))
             embed.description = "**✅ Añadida a la cola de reproducción**"
             await interaction.followup.send(embed=embed)
         else:
             bot.songs_played += 1
             bot.current_track = titulo
-            vc.play(discord.FFmpegPCMAudio(url, **FFMPEG_OPTIONS), after=lambda e: play_next(interaction))
+            vc.play(discord.FFmpegPCMAudio(real_url, **FFMPEG_OPTIONS), after=lambda e: play_next(interaction))
             embed.description = "**▶️ Reproduciendo ahora en alta calidad**"
             await interaction.followup.send(embed=embed)
 
@@ -133,23 +141,37 @@ class SongView(ui.View):
         super().__init__()
         self.add_item(SongSelect(options_data))
 
-# --- COMANDOS ---
+# --- COMANDOS (LOS 20 COMPLETOS) ---
 
 @bot.tree.command(name="play", description="Busca música a velocidad ultra-rápida")
 async def play(interaction: discord.Interaction, cancion: str):
     await interaction.response.defer()
     try:
-        # Búsqueda optimizada (extract_flat=True)
+        # Búsqueda optimizada
         data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(cancion, download=False))
-        results = data['entries']
         
-        view = SongView(results)
+        # --- CORRECCIÓN DEL ERROR 'ENTRIES' ---
+        if 'entries' in data:
+            results = data['entries'] # Es una búsqueda o playlist
+        elif 'url' in data or 'webpage_url' in data:
+            results = [data] # Es un link directo
+        else:
+            results = []
+
+        if not results:
+            return await interaction.followup.send("❌ No encontré nada con ese nombre.")
+
+        # Limpiamos resultados vacíos y limitamos a 5
+        clean_results = [r for r in results if r][:5]
+        
+        view = SongView(clean_results)
         embed = discord.Embed(title="🔎 Resultados de búsqueda", description=f"He encontrado esto para: **{cancion}**", color=discord.Color.blue())
         embed.set_footer(text="Selecciona una opción abajo 👇")
         
         await interaction.followup.send(embed=embed, view=view)
     except Exception as e:
-        await interaction.followup.send(f"❌ Error: {e}")
+        print(f"Error en play: {e}") # Para ver en consola si falla algo más
+        await interaction.followup.send(f"❌ Error al buscar: {e}")
 
 @bot.tree.command(name="announce", description="Fuerza el anuncio (Admin)")
 async def announce(interaction: discord.Interaction):
@@ -265,8 +287,8 @@ async def lyrics(interaction: discord.Interaction):
 @bot.tree.command(name="info")
 async def info(interaction: discord.Interaction):
     embed = discord.Embed(title="🤖 Flexus V3 System", description="Bot de música avanzado con gestión de Docker y Ads.", color=discord.Color.blurple())
-    embed.add_field(name="Versión", value="3.0.1 (Speed Update)", inline=True)
-    embed.add_field(name="Desarrollador", value="AlexGaming", inline=True)
+    embed.add_field(name="Versión", value="3.1.0 (Stable)", inline=True)
+    embed.add_field(name="Sistema VIP", value="Activado", inline=True)
     await interaction.response.send_message(embed=embed)
 
 @bot.tree.command(name="help")
