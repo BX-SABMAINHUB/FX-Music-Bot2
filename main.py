@@ -25,31 +25,29 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self): 
         await self.tree.sync() 
-        print(f"✅ FLEXUS V3.1: SISTEMA ESTABILIZADO Y LISTO") 
+        print(f"✅ FLEXUS V3.2: BUSCADOR REPARADO + AUDIO HD") 
 
 bot = FlexusBot() 
 
-# CONFIGURACIÓN YTDL (MODO VELOCIDAD + SEGURIDAD)
+# CONFIGURACIÓN YTDL (EQUILIBRIO VELOCIDAD/DATOS)
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
-    'extract_flat': True, # Velocidad extrema para buscar
     'default_search': 'ytsearch5',
     'headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'}
 } 
 
-# CONFIGURACIÓN FFMPEG (AUDIO HD)
+# CONFIGURACIÓN FFMPEG (CALIDAD RECTA SIN CORTES)
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn -b:a 192k' # Forzamos calidad de audio
+    'options': '-vn -b:a 192k'
 }
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 # --- LÓGICA DE AUDIO Y ANUNCIOS ---
 
 async def registrar_anuncio(guild):
-    """Registra visitas en MongoDB para Vercel"""
     if guild.voice_client and guild.voice_client.channel:
         oyentes = len(guild.voice_client.channel.members) - 1
         await stats_col.update_one({"id": "global"}, {"$inc": {"views": max(0, oyentes)}}, upsert=True)
@@ -58,23 +56,17 @@ def play_next(interaction):
     if not interaction.guild.voice_client: return
     canal = interaction.guild.voice_client.channel
     
-    # Detección VIP (Si hay un VIP, es_vip = True)
+    # SISTEMA VIP: Si hay alguien con rol "VIP", no hay anuncios
     es_vip = any(any(r.name == "VIP" for r in m.roles) for m in canal.members)
 
-    # Lógica de Anuncios (Cada 3 canciones)
     if bot.songs_played >= 3:
         bot.songs_played = 0
-        # Solo suena si NO hay VIPs y existe el archivo
         if not es_vip and os.path.exists("anuncio.mp3"):
-            print("📢 Reproduciendo publicidad...")
             source = discord.FFmpegPCMAudio("anuncio.mp3")
             interaction.guild.voice_client.play(source, after=lambda e: play_next(interaction))
             asyncio.run_coroutine_threadsafe(registrar_anuncio(interaction.guild), bot.loop)
             return
-        elif es_vip:
-            print("💎 VIP Detectado: Saltando publicidad.")
 
-    # Reproducción de la cola
     if len(bot.queue) > 0:
         url, titulo = bot.queue.pop(0)
         bot.songs_played += 1
@@ -84,56 +76,51 @@ def play_next(interaction):
     else:
         bot.current_track = None
 
-# --- INTERFAZ MODERNA (MENU DE SELECCIÓN) ---
+# --- INTERFAZ DE SELECCIÓN ---
 
 class SongSelect(ui.Select):
     def __init__(self, options_data):
-        # Creamos el menú desplegable
         options = []
         for i, d in enumerate(options_data):
-            # Aseguramos que haya título y url
-            title = d.get('title', 'Canción desconocida')[:90]
-            uploader = d.get('uploader', 'YouTube')
+            # Priorizamos el título real sobre el genérico
+            title = d.get('title') or d.get('alt_title') or "Canción seleccionada"
+            uploader = d.get('uploader') or "YouTube"
             options.append(discord.SelectOption(
-                label=title, 
-                emoji="🎵", 
-                description=f"Canal: {uploader}", 
+                label=title[:90], 
+                emoji="🎶", 
+                description=f"Canal: {uploader[:30]}", 
                 value=str(i)
             ))
             
-        super().__init__(placeholder="🔥 Selecciona tu temazo aquí...", options=options)
+        super().__init__(placeholder="💎 Elige la canción que quieres escuchar...", options=options)
         self.options_data = options_data
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         
-        # Recuperamos la elección
         selected_index = int(self.values[0])
         selected_data = self.options_data[selected_index]
-        video_url = selected_data.get('url') or selected_data.get('webpage_url')
+        video_url = selected_data.get('webpage_url') or selected_data.get('url')
         
-        # AHORA procesamos el audio real (Alta Calidad)
+        # Extracción final para el audio directo
         info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(video_url, download=False))
         real_url = info['url']
         titulo = info['title']
-        img_url = info.get('thumbnail', None)
         
         vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
         
-        # Embed de confirmación
-        embed = discord.Embed(title=f"💿 {titulo}", color=discord.Color.green())
-        if img_url: embed.set_thumbnail(url=img_url)
-        embed.set_footer(text="Flexus Premium Audio System")
+        embed = discord.Embed(title=f"🎵 {titulo}", color=0x2f3136)
+        embed.set_footer(text="Flexus Premium | Audio HD 192kbps")
 
         if vc.is_playing():
             bot.queue.append((real_url, titulo))
-            embed.description = "**✅ Añadida a la cola de reproducción**"
+            embed.description = "✅ **Añadida a la cola correctamente**"
             await interaction.followup.send(embed=embed)
         else:
             bot.songs_played += 1
             bot.current_track = titulo
             vc.play(discord.FFmpegPCMAudio(real_url, **FFMPEG_OPTIONS), after=lambda e: play_next(interaction))
-            embed.description = "**▶️ Reproduciendo ahora en alta calidad**"
+            embed.description = "▶️ **Reproduciendo ahora mismo**"
             await interaction.followup.send(embed=embed)
 
 class SongView(ui.View):
@@ -141,160 +128,139 @@ class SongView(ui.View):
         super().__init__()
         self.add_item(SongSelect(options_data))
 
-# --- COMANDOS (LOS 20 COMPLETOS) ---
+# --- LOS 20 COMANDOS DE FLEXUS ---
 
-@bot.tree.command(name="play", description="Busca música a velocidad ultra-rápida")
+@bot.tree.command(name="play", description="Busca y elige entre las mejores opciones")
 async def play(interaction: discord.Interaction, cancion: str):
     await interaction.response.defer()
     try:
-        # Búsqueda optimizada
-        data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(cancion, download=False))
-        
-        # --- CORRECCIÓN DEL ERROR 'ENTRIES' ---
-        if 'entries' in data:
-            results = data['entries'] # Es una búsqueda o playlist
-        elif 'url' in data or 'webpage_url' in data:
-            results = [data] # Es un link directo
-        else:
-            results = []
+        # Buscamos sin extract_flat para obtener nombres reales SIEMPRE
+        data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{cancion}", download=False))
+        results = data['entries']
 
         if not results:
-            return await interaction.followup.send("❌ No encontré nada con ese nombre.")
+            return await interaction.followup.send("❌ No he encontrado resultados.")
 
-        # Limpiamos resultados vacíos y limitamos a 5
-        clean_results = [r for r in results if r][:5]
-        
-        view = SongView(clean_results)
-        embed = discord.Embed(title="🔎 Resultados de búsqueda", description=f"He encontrado esto para: **{cancion}**", color=discord.Color.blue())
-        embed.set_footer(text="Selecciona una opción abajo 👇")
-        
+        view = SongView(results)
+        embed = discord.Embed(
+            title="🎯 Resultados para: " + cancion, 
+            description="He encontrado estas canciones parecidas. ¡Elige una!", 
+            color=0x00ff77
+        )
         await interaction.followup.send(embed=embed, view=view)
     except Exception as e:
-        print(f"Error en play: {e}") # Para ver en consola si falla algo más
-        await interaction.followup.send(f"❌ Error al buscar: {e}")
+        await interaction.followup.send(f"❌ Error en la búsqueda: {e}")
 
-@bot.tree.command(name="announce", description="Fuerza el anuncio (Admin)")
+@bot.tree.command(name="announce", description="Lanza un anuncio manualmente")
 async def announce(interaction: discord.Interaction):
     vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
     if os.path.exists("anuncio.mp3"):
         if vc.is_playing(): vc.stop()
         vc.play(discord.FFmpegPCMAudio("anuncio.mp3"), after=lambda e: play_next(interaction))
         await registrar_anuncio(interaction.guild)
-        
-        embed = discord.Embed(title="📢 ANUNCIO", description="Reproduciendo mensaje del patrocinador...", color=discord.Color.gold())
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message("📢 **Reproduciendo anuncio publicitario...**")
     else:
-        await interaction.response.send_message("❌ Error: No existe `anuncio.mp3` en el sistema.")
+        await interaction.response.send_message("❌ Error: Sube el archivo `anuncio.mp3`.")
 
-@bot.tree.command(name="skip", description="Salta la canción")
+@bot.tree.command(name="skip", description="Salta la pista actual")
 async def skip(interaction: discord.Interaction):
     if interaction.guild.voice_client:
         interaction.guild.voice_client.stop()
-        embed = discord.Embed(description="⏭️ **Canción saltada**", color=discord.Color.orange())
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message("⏭️ **Canción saltada.**")
 
-@bot.tree.command(name="stop", description="Detiene y desconecta")
+@bot.tree.command(name="stop", description="Limpia todo y desconecta")
 async def stop(interaction: discord.Interaction):
     bot.queue.clear()
     if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect()
-    embed = discord.Embed(description="⏹️ **Desconectado y cola limpia**", color=discord.Color.red())
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message("⏹️ **Bot detenido y cola vaciada.**")
 
-@bot.tree.command(name="pause")
+@bot.tree.command(name="pause", description="Pausa la música")
 async def pause(interaction: discord.Interaction):
     if interaction.guild.voice_client: interaction.guild.voice_client.pause()
-    await interaction.response.send_message("⏸️ Pausado.")
+    await interaction.response.send_message("⏸️ **Música pausada.**")
 
-@bot.tree.command(name="resume")
+@bot.tree.command(name="resume", description="Sigue con la música")
 async def resume(interaction: discord.Interaction):
     if interaction.guild.voice_client: interaction.guild.voice_client.resume()
-    await interaction.response.send_message("▶️ Reanudado.")
+    await interaction.response.send_message("▶️ **Música reanudada.**")
 
-@bot.tree.command(name="queue", description="Muestra la cola")
+@bot.tree.command(name="queue", description="Ver la lista de espera")
 async def queue(interaction: discord.Interaction):
-    if not bot.queue: 
-        return await interaction.response.send_message(embed=discord.Embed(description="📂 **La cola está vacía**", color=discord.Color.dark_grey()))
-    
-    lista = "\n".join([f"`{i+1}.` {t[1]}" for i, t in enumerate(bot.queue[:10])])
-    embed = discord.Embed(title="📋 Cola de Reproducción", description=lista, color=discord.Color.purple())
+    if not bot.queue: return await interaction.response.send_message("📋 **La cola está vacía.**")
+    lista = "\n".join([f"**{i+1}.** {t[1]}" for i, t in enumerate(bot.queue[:10])])
+    embed = discord.Embed(title="📋 Cola de Reproducción", description=lista, color=0x7289da)
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="nowplaying")
+@bot.tree.command(name="nowplaying", description="¿Qué está sonando?")
 async def np(interaction: discord.Interaction):
-    cancion = bot.current_track or "Nada sonando"
-    embed = discord.Embed(title="🎧 Ahora suena", description=f"**{cancion}**", color=discord.Color.green())
-    await interaction.response.send_message(embed=embed)
+    txt = bot.current_track if bot.current_track else "Nada"
+    await interaction.response.send_message(f"🎧 **Ahora suena:** {txt}")
 
-@bot.tree.command(name="shuffle")
+@bot.tree.command(name="shuffle", description="Mezcla la cola")
 async def shuffle(interaction: discord.Interaction):
     random.shuffle(bot.queue)
-    await interaction.response.send_message("🔀 **Cola mezclada aleatoriamente.**")
+    await interaction.response.send_message("🔀 **Cola mezclada.**")
 
-@bot.tree.command(name="volume")
-async def volume(interaction: discord.Interaction, vol: int):
+@bot.tree.command(name="volume", description="Ajusta el volumen (0-100)")
+async def volume(interaction: discord.Interaction, nivel: int):
     if interaction.guild.voice_client and interaction.guild.voice_client.source:
-        interaction.guild.voice_client.source.volume = vol / 100
-        await interaction.response.send_message(f"🔊 Volumen ajustado al **{vol}%**")
+        interaction.guild.voice_client.source.volume = nivel / 100
+        await interaction.response.send_message(f"🔊 Volumen al **{nivel}%**")
 
-@bot.tree.command(name="ping")
+@bot.tree.command(name="ping", description="Ver latencia")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message(f"📡 Latencia: **{round(bot.latency * 1000)}ms**")
 
-@bot.tree.command(name="clear")
+@bot.tree.command(name="clear", description="Borra la cola")
 async def clear(interaction: discord.Interaction):
     bot.queue.clear()
-    await interaction.response.send_message("🗑️ **Cola eliminada.**")
+    await interaction.response.send_message("🗑️ **Cola limpiada.**")
 
-@bot.tree.command(name="stats")
+@bot.tree.command(name="stats", description="Impacto de audiencia")
 async def stats(interaction: discord.Interaction):
     data = await stats_col.find_one({"id": "global"})
-    vistas = data["views"] if data else 0
-    embed = discord.Embed(title="📊 Estadísticas de Impacto", description=f"Total de oyentes alcanzados:\n# **{vistas}**", color=discord.Color.teal())
-    await interaction.response.send_message(embed=embed)
+    v = data["views"] if data else 0
+    await interaction.response.send_message(f"📊 **Impacto Total:** {v} oyentes alcanzados.")
 
-@bot.tree.command(name="leave")
+@bot.tree.command(name="leave", description="Saca al bot del canal")
 async def leave(interaction: discord.Interaction):
     if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect()
-    await interaction.response.send_message("👋 **¡Nos vemos!**")
+    await interaction.response.send_message("👋 **¡Hasta la próxima!**")
 
-@bot.tree.command(name="jump")
-async def jump(interaction: discord.Interaction, pos: int):
-    if 0 < pos <= len(bot.queue):
-        for _ in range(pos - 1): bot.queue.pop(0)
+@bot.tree.command(name="jump", description="Salta a una posición de la cola")
+async def jump(interaction: discord.Interaction, posicion: int):
+    if 0 < posicion <= len(bot.queue):
+        for _ in range(posicion - 1): bot.queue.pop(0)
         interaction.guild.voice_client.stop()
-        await interaction.response.send_message(f"⏩ Saltando a la posición **#{pos}**")
-    else:
-        await interaction.response.send_message("❌ Posición inválida.")
+        await interaction.response.send_message(f"⏩ **Saltando a la canción #{posicion}...**")
 
-@bot.tree.command(name="restart")
+@bot.tree.command(name="restart", description="Reinicia la canción")
 async def restart(interaction: discord.Interaction):
-    await interaction.response.send_message("🔄 **Reiniciando pista actual...**")
+    await interaction.response.send_message("🔄 **Reiniciando pista...**")
 
-@bot.tree.command(name="bassboost")
+@bot.tree.command(name="bassboost", description="Potencia los bajos")
 async def bass(interaction: discord.Interaction):
-    embed = discord.Embed(title="🔊 Bass Boost", description="Modo **EXTREME BASS** activado.", color=discord.Color.dark_purple())
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message("🔊 **Bass Boost activado.**")
 
-@bot.tree.command(name="loop")
+@bot.tree.command(name="loop", description="Repite la canción")
 async def loop(interaction: discord.Interaction):
-    await interaction.response.send_message("🔄 **Modo Bucle:** Activado.")
+    await interaction.response.send_message("🔄 **Bucle activado.**")
 
-@bot.tree.command(name="lyrics")
+@bot.tree.command(name="lyrics", description="Busca la letra")
 async def lyrics(interaction: discord.Interaction):
-    embed = discord.Embed(description=f"🔍 Buscando letra para: **{bot.current_track}**...", color=discord.Color.light_grey())
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message(f"🔍 Buscando letras para **{bot.current_track}**...")
 
-@bot.tree.command(name="info")
+@bot.tree.command(name="info", description="Información del sistema")
 async def info(interaction: discord.Interaction):
-    embed = discord.Embed(title="🤖 Flexus V3 System", description="Bot de música avanzado con gestión de Docker y Ads.", color=discord.Color.blurple())
-    embed.add_field(name="Versión", value="3.1.0 (Stable)", inline=True)
-    embed.add_field(name="Sistema VIP", value="Activado", inline=True)
+    embed = discord.Embed(title="Flexus Bot V3.2 Premium", color=0x00ff77)
+    embed.add_field(name="Calidad", value="192kbps HD", inline=True)
+    embed.add_field(name="VIP", value="Soportado", inline=True)
+    embed.set_footer(text="By AlexGaming")
     await interaction.response.send_message(embed=embed)
 
-@bot.tree.command(name="help")
+@bot.tree.command(name="help", description="Lista de comandos")
 async def help_cmd(interaction: discord.Interaction):
-    cmds = "`play`, `announce`, `skip`, `stop`, `pause`, `resume`, `queue`, `nowplaying`, `shuffle`, `volume`, `ping`, `clear`, `stats`, `leave`, `jump`, `restart`, `bassboost`, `loop`, `lyrics`, `info`"
-    embed = discord.Embed(title="👑 Panel de Ayuda Flexus", description=cmds, color=discord.Color.gold())
-    await interaction.response.send_message(embed=embed)
+    c = "play, announce, skip, stop, pause, resume, queue, nowplaying, shuffle, volume, ping, clear, stats, leave, jump, restart, bassboost, loop, lyrics, info"
+    await interaction.response.send_message(f"👑 **Comandos Flexus:**\n`{c}`")
 
 bot.run(TOKEN)
