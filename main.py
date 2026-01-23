@@ -16,6 +16,7 @@ VIP_ROLE_NAME = "VIP"
 mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client["flexus_data"]
 reviews_col = db["reviews"]
+blacklist_col = db["blacklist"] # <--- NUEVA COLECCIÓN PARA BANEOS
 
 class FlexusBot(commands.Bot): 
     def __init__(self): 
@@ -27,8 +28,23 @@ class FlexusBot(commands.Bot):
         self.loop_mode = False
 
     async def setup_hook(self): 
+        # ESTO ES EL PORTERO: Revisa baneo antes de CUALQUIER comando
+        @self.tree.interaction_check
+        async def check_if_banned(interaction: discord.Interaction):
+            # Buscamos si el ID del usuario está en la lista negra
+            user_banned = await blacklist_col.find_one({"user_id": str(interaction.user.id)})
+            if user_banned:
+                emb = discord.Embed(
+                    title="🚫 ACCESO DENEGADO",
+                    description="Has sido bloqueado del sistema por el administrador **Alex27Junio**.\nSi crees que es un error, contacta con el soporte.",
+                    color=0xff0000
+                )
+                await interaction.response.send_message(embed=emb, ephemeral=True)
+                return False # Bloquea el comando
+            return True # Permite el comando
+
         await self.tree.sync() 
-        print(f"💎 FLEXUS V12.0: SISTEMA ANTI-ERROR ACTIVADO") 
+        print(f"💎 FLEXUS V12.0: SISTEMA ANTI-ERROR Y SEGURIDAD ACTIVADOS") 
 
 bot = FlexusBot() 
 
@@ -44,7 +60,7 @@ YTDL_OPTIONS = {
     'cachedir': False
 } 
 
-# ESTO SOLUCIONA EL CIERRE RÁPIDO: Buffer masivo y reconexión agresiva
+# ESTO SOLUCIONA EL CIERRE RÁPIDO
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -probesize 10M -analyzeduration 10M',
     'options': '-vn -b:a 192k -ar 48000' 
@@ -73,11 +89,8 @@ class ReviewModal(ui.Modal, title="⭐ VALORACIÓN PREMIUM ⭐"):
 def play_audio(interaction, channel_id, user, is_ad=False):
     if not interaction.guild.voice_client: return
 
-    # Si NO es un anuncio, manejamos la lógica de fin de canción
     def after_playing(error):
         if error: print(f"Error en reproducción: {error}")
-        
-        # Si terminó una canción real (no anuncio), lanzar reseña
         if not is_ad and bot.current_track and not bot.loop_mode:
             track_ended = bot.current_track
             async def send_rev():
@@ -88,11 +101,8 @@ def play_audio(interaction, channel_id, user, is_ad=False):
                     view.children[0].callback = cb
                     await chan.send(embed=discord.Embed(title="🎼 CANCIÓN FINALIZADA", description=f"**{track_ended}**", color=0x00ff77), view=view)
             bot.loop.create_task(send_rev())
-
-        # Siguiente en la cola
         bot.loop.call_soon_threadsafe(next_song, interaction, channel_id, user)
 
-    # LÓGICA DE ANUNCIO VIP
     is_vip = any(role.name == VIP_ROLE_NAME for role in user.roles)
     if not is_ad and not is_vip and bot.songs_played >= 3 and os.path.exists("anuncio.mp3"):
         bot.songs_played = 0
@@ -100,13 +110,10 @@ def play_audio(interaction, channel_id, user, is_ad=False):
         bot.loop.create_task(interaction.channel.send(embed=discord.Embed(title="📢 ANUNCIO", color=0xffff00)))
         return
 
-    # Reproducir siguiente canción
     if bot.queue:
         url, title = bot.queue.pop(0)
         bot.current_track = title
         bot.songs_played += 1
-        
-        # Extraer info fresca justo antes de tocar para evitar URLs expiradas
         data = ytdl.extract_info(url, download=False)
         interaction.guild.voice_client.play(discord.FFmpegPCMAudio(data['url'], **FFMPEG_OPTIONS), after=after_playing)
     else:
@@ -115,7 +122,7 @@ def play_audio(interaction, channel_id, user, is_ad=False):
 def next_song(interaction, channel_id, user):
     play_audio(interaction, channel_id, user)
 
-# --- COMANDOS (19 COMANDOS DECORADOS) ---
+# --- COMANDOS ---
 @bot.tree.command(name="play", description="🎶 Sonido Premium 192k")
 async def play(interaction: discord.Interaction, buscar: str):
     await interaction.response.defer()
