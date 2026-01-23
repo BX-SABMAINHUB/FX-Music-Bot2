@@ -1,23 +1,220 @@
-<script>
-    async function fetchReviews() {
-        try {
-            const res = await fetch('/api/get-reviews');
-            const reviews = await res.json();
-            const list = document.getElementById('reviews-list');
-            
-            list.innerHTML = reviews.map(r => `
-                <div class="review-card">
-                    <img src="${r.user_avatar || ''}" class="avatar">
-                    <strong>@${r.user || 'Anónimo'}</strong>
-                    <div>${"⭐".repeat(r.stars || 0)}</div>
-                    <p>${r.message || ''}</p>
-                    <small>En: ${r.song || 'Desconocida'}</small>
-                </div>
-            `).join('');
-        } catch (e) {
-            document.getElementById('reviews-list').innerHTML = "Error cargando reseñas.";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flexus Premium | Dashboard</title>
+    <style>
+        :root {
+            --flexus-green: #00ff77;
+            --bg-dark: #0b0b0b;
+            --card-bg: #161616;
+            --text-gray: #b3b3b3;
         }
-    }
-    setInterval(fetchReviews, 10000);
-    fetchReviews();
-</script>
+
+        body {
+            background-color: var(--bg-dark);
+            color: #ffffff;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* --- CABECERA --- */
+        .header {
+            width: 100%;
+            padding: 40px 0;
+            text-align: center;
+            background: linear-gradient(to bottom, #111, var(--bg-dark));
+            border-bottom: 1px solid #222;
+        }
+
+        .header h1 {
+            color: var(--flexus-green);
+            font-size: 2.5rem;
+            letter-spacing: 8px;
+            margin: 0;
+            text-shadow: 0 0 20px rgba(0, 255, 119, 0.3);
+        }
+
+        /* --- CONTADOR DE IMPACTO --- */
+        .stats-box {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 20px;
+            margin-top: -30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            text-align: center;
+            min-width: 280px;
+            border: 1px solid #222;
+        }
+
+        #ads-count {
+            font-size: 5rem;
+            font-weight: 900;
+            display: block;
+            line-height: 1;
+            background: linear-gradient(to bottom, #fff, #666);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .stats-label {
+            color: var(--text-gray);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-size: 0.8rem;
+            margin-top: 10px;
+        }
+
+        /* --- CONTENEDOR DE RESEÑAS --- */
+        .content {
+            width: 90%;
+            max-width: 1000px;
+            margin: 50px 0;
+        }
+
+        .section-title {
+            color: #fff;
+            font-size: 1.5rem;
+            margin-bottom: 30px;
+            border-left: 4px solid var(--flexus-green);
+            padding-left: 15px;
+        }
+
+        #reviews-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        /* --- TARJETA DE RESEÑA --- */
+        .review-card {
+            background: var(--card-bg);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid #222;
+            transition: transform 0.3s ease, border-color 0.3s ease;
+        }
+
+        .review-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--flexus-green);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 15px;
+        }
+
+        .avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: 2px solid var(--flexus-green);
+            background-color: #333;
+        }
+
+        .user-name {
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .stars {
+            color: #ffcc00;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .review-text {
+            color: #ddd;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            margin: 0;
+            font-style: italic;
+        }
+
+        .song-tag {
+            display: inline-block;
+            margin-top: 15px;
+            font-size: 0.75rem;
+            color: var(--flexus-green);
+            background: rgba(0, 255, 119, 0.1);
+            padding: 4px 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>FLEXUS PREMIUM</h1>
+    </div>
+
+    <div class="stats-box">
+        <span id="ads-count">0</span>
+        <div class="stats-label">Oyentes Impactados</div>
+    </div>
+
+    <div class="content">
+        <h2 class="section-title">Últimas Reseñas</h2>
+        <div id="reviews-list">
+            </div>
+    </div>
+
+    <script>
+        // Función para obtener las estadísticas (Contador)
+        async function updateStats() {
+            try {
+                const res = await fetch('/api/get-stats');
+                const data = await res.json();
+                document.getElementById('ads-count').innerText = data.views || 0;
+            } catch (e) {
+                console.error("Error stats:", e);
+            }
+        }
+
+        // Función para obtener las reseñas (Feed)
+        async function updateReviews() {
+            try {
+                const res = await fetch('/api/get-reviews');
+                const reviews = await res.json();
+                const list = document.getElementById('reviews-list');
+
+                if (!reviews || reviews.length === 0) {
+                    list.innerHTML = "<p style='color: #555;'>Aún no hay reseñas registradas.</p>";
+                    return;
+                }
+
+                list.innerHTML = reviews.map(r => `
+                    <div class="review-card">
+                        <div class="user-info">
+                            <img src="${r.user_avatar || 'https://cdn.discordapp.com/embed/avatars/0.png'}" class="avatar">
+                            <span class="user-name">@${r.user}</span>
+                        </div>
+                        <div class="stars">${"★".repeat(r.stars)}${"☆".repeat(5-r.stars)}</div>
+                        <p class="review-text">"${r.message}"</p>
+                        <div class="song-tag">🎵 ${r.song}</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                console.error("Error reviews:", e);
+                document.getElementById('reviews-list').innerHTML = "<p>Error al cargar el feed.</p>";
+            }
+        }
+
+        // Carga inicial
+        updateStats();
+        updateReviews();
+
+        // Refresco automático cada 10 segundos
+        setInterval(updateStats, 10000);
+        setInterval(updateReviews, 10000);
+    </script>
+</body>
+</html>
