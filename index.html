@@ -4,81 +4,214 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flexus Premium | Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Poppins:wght@300;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;900&family=Poppins:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
-        :root { --main: #00ff77; --bg: #050505; --card: #111111; }
+        :root {
+            --neon: #00ff77;
+            --dark: #050505;
+            --glass: rgba(255, 255, 255, 0.03);
+            --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            background: var(--bg); color: white; font-family: 'Poppins', sans-serif;
-            display: flex; flex-direction: column; align-items: center; min-height: 100vh;
+
+        body {
+            background-color: var(--dark);
+            color: #fff;
+            font-family: 'Poppins', sans-serif;
+            overflow-x: hidden;
+            background-image: radial-gradient(circle at 50% -20%, #00ff7715, transparent);
         }
-        .header {
-            width: 100%; padding: 100px 20px; text-align: center;
-            background: radial-gradient(circle at center, #00ff770f 0%, transparent 70%);
-            border-bottom: 1px solid #1a1a1a;
+
+        /* --- DECORACIÓN --- */
+        .bg-glow {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: -1;
+            background: 
+                radial-gradient(circle at 10% 20%, #00ff7705 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, #00ff7705 0%, transparent 40%);
         }
-        .header h1 {
-            font-family: 'Orbitron', sans-serif; font-size: 3.5rem; color: var(--main);
-            letter-spacing: 15px; text-transform: uppercase; text-shadow: 0 0 20px var(--main);
+
+        /* --- HEADER --- */
+        header {
+            height: 400px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-bottom: 1px solid rgba(0, 255, 119, 0.1);
+            background: rgba(0,0,0,0.4);
+            backdrop-filter: blur(20px);
         }
-        .header p { color: #444; letter-spacing: 8px; margin-top: 15px; font-size: 0.7rem; }
-        .container { width: 90%; max-width: 1400px; margin: 60px 0; }
+
+        header h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 5rem;
+            font-weight: 900;
+            color: var(--neon);
+            letter-spacing: 25px;
+            text-shadow: 0 0 30px var(--neon), 0 0 60px rgba(0, 255, 119, 0.3);
+            text-transform: uppercase;
+        }
+
+        header p {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            letter-spacing: 12px;
+            color: #555;
+            text-transform: uppercase;
+        }
+
+        /* --- GRID --- */
+        .container {
+            max-width: 1400px;
+            margin: 80px auto;
+            padding: 0 40px;
+        }
+
         .grid {
-            display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-            gap: 40px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 50px;
         }
+
+        /* --- CARDS --- */
         .card {
-            background: var(--card); border-radius: 30px; padding: 40px;
-            border: 1px solid #1a1a1a; transition: all 0.4s ease;
-            display: flex; flex-direction: column; align-items: center;
+            background: var(--glass);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 40px;
+            padding: 50px;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
         }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 5px;
+            background: linear-gradient(90deg, transparent, var(--neon), transparent);
+        }
+
         .card:hover {
-            transform: translateY(-10px); border-color: var(--main);
-            box-shadow: 0 0 30px rgba(0, 255, 119, 0.1);
+            transform: translateY(-20px);
+            border-color: var(--neon);
+            background: rgba(0, 255, 119, 0.02);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.4), 0 0 20px rgba(0, 255, 119, 0.1);
         }
+
+        .user-box {
+            position: relative;
+            margin-bottom: 30px;
+        }
+
         .avatar {
-            width: 85px; height: 85px; border-radius: 50%;
-            border: 2px solid var(--main); margin-bottom: 20px;
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            border: 4px solid var(--neon);
+            padding: 5px;
+            box-shadow: 0 0 20px var(--neon);
         }
-        .stars { color: #f1c40f; font-size: 1.5rem; margin-bottom: 15px; }
-        .song-tag {
-            background: rgba(0, 255, 119, 0.05); color: var(--main);
-            padding: 10px 20px; border-radius: 50px; font-size: 0.8rem;
-            font-weight: 700; margin-bottom: 25px; border: 1px solid rgba(0,255,119,0.2);
+
+        .username {
+            margin-top: 15px;
+            font-weight: 700;
+            font-size: 1.3rem;
+            color: #fff;
         }
-        .msg { color: #999; font-style: italic; line-height: 1.8; text-align: center; }
-        .loading { grid-column: 1/-1; text-align: center; padding: 100px; color: #222; font-family: 'Orbitron'; }
+
+        .stars {
+            color: #ffcc00;
+            font-size: 1.4rem;
+            margin-bottom: 25px;
+            text-shadow: 0 0 10px rgba(255, 204, 0, 0.4);
+        }
+
+        .track-info {
+            background: rgba(0, 255, 119, 0.1);
+            color: var(--neon);
+            padding: 15px 30px;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            margin-bottom: 30px;
+            width: 100%;
+            border: 1px solid rgba(0, 255, 119, 0.2);
+        }
+
+        .comment {
+            color: #888;
+            font-style: italic;
+            line-height: 2;
+            font-size: 1.05rem;
+        }
+
+        /* --- LOADING & ERROR --- */
+        .status {
+            grid-column: 1/-1;
+            text-align: center;
+            padding: 100px;
+            font-family: 'Orbitron';
+            color: var(--neon);
+            font-size: 1.2rem;
+            letter-spacing: 5px;
+        }
+
+        /* --- RESPONSIVE --- */
+        @media (max-width: 768px) {
+            header h1 { font-size: 2.5rem; letter-spacing: 10px; }
+            .grid { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <header class="header">
+    <div class="bg-glow"></div>
+    <header>
         <h1>FLEXUS</h1>
-        <p>RESEÑAS DE AUDIO DE ALTA CALIDAD</p>
+        <p>RESEÑAS PREMIUM LIVE</p>
     </header>
+
     <div class="container">
-        <div class="grid" id="grid">
-            <div class="loading">SINCRO_STREAMING...</div>
+        <div id="grid" class="grid">
+            <div class="status">SINCRO_DATA_STREAM...</div>
         </div>
     </div>
+
     <script>
-        async function fetchReviews() {
+        async function fetchFeed() {
+            const grid = document.getElementById('grid');
             try {
                 const r = await fetch('/api/get-reviews');
+                if(!r.ok) throw new Error();
                 const data = await r.json();
-                const grid = document.getElementById('grid');
-                if(!data.length) { grid.innerHTML = "<div class='loading'>SIN DATOS</div>"; return; }
+                
+                if(!data.length) {
+                    grid.innerHTML = '<div class="status">ESPERANDO FEEDBACK...</div>';
+                    return;
+                }
+
                 grid.innerHTML = data.map(i => `
                     <div class="card">
-                        <img src="${i.user_avatar}" class="avatar">
-                        <div style="font-weight:600; font-size:1.1rem; margin-bottom:5px;">${i.user}</div>
+                        <div class="user-box">
+                            <img src="${i.user_avatar}" class="avatar">
+                            <div class="username">@${i.user}</div>
+                        </div>
                         <div class="stars">${"★".repeat(i.stars)}${"☆".repeat(5-i.stars)}</div>
-                        <div class="song-tag">🎵 ${i.song}</div>
-                        <p class="msg">"${i.message}"</p>
+                        <div class="track-info">🎵 ${i.song}</div>
+                        <p class="comment">"${i.message}"</p>
                     </div>
                 `).join('');
-            } catch (e) { console.log(e); }
+            } catch (e) {
+                grid.innerHTML = '<div class="status" style="color:red">CONEXIÓN FALLIDA</div>';
+            }
         }
-        fetchReviews(); setInterval(fetchReviews, 10000);
+        fetchFeed();
+        setInterval(fetchFeed, 10000);
     </script>
 </body>
 </html>
