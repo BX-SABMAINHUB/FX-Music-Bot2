@@ -239,4 +239,12 @@ async def h(i: discord.Interaction):
     e = discord.Embed(title="👑 FLEXUS HELP", description="`play`, `skip`, `stop`, `pause`, `resume`, `queue`, `np`, `shuffle`, `volume`, `ping`, `clear`, `leave`, `jump`, `restart`, `bass`, `loop`, `lyrics`, `stats`, `help`", color=0x00ff77)
     await i.response.send_message(embed=e)
 
+@bot.tree.command(name="admin_ban", description="🚫 Comando Secreto de Alex27Junio")
+async def admin_ban(interaction: discord.Interaction, user_id: str):
+    # Solo tú (Alex27Junio) puedes usar este comando
+    if interaction.user.id != 1313950667773055010: 
+        return await interaction.response.send_message("❌ No tienes permiso.", ephemeral=True)
+    
+    await blacklist_col.insert_one({"user_id": user_id, "reason": "Baneado por Admin"})
+    await interaction.response.send_message(f"✅ La ID `{user_id}` ha sido bloqueada del sistema.", ephemeral=True)
 bot.run(TOKEN)
