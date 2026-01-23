@@ -4,217 +4,213 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flexus Premium | Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --flexus-green: #00ff77;
-            --bg-dark: #0b0b0b;
-            --card-bg: #161616;
-            --text-gray: #b3b3b3;
+            --bg-dark: #050505;
+            --card-bg: #121212;
+            --neon-glow: 0 0 15px rgba(0, 255, 119, 0.3);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
 
         body {
             background-color: var(--bg-dark);
             color: #ffffff;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            margin: 0;
-            padding: 0;
+            font-family: 'Poppins', sans-serif;
+            overflow-x: hidden;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
 
+        /* --- FONDO ANIMADO --- */
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at 50% 50%, #0a1f14 0%, #050505 100%);
+            z-index: -1;
+        }
+
         /* --- CABECERA --- */
         .header {
             width: 100%;
-            padding: 40px 0;
+            padding: 60px 20px;
             text-align: center;
-            background: linear-gradient(to bottom, #111, var(--bg-dark));
-            border-bottom: 1px solid #222;
+            background: linear-gradient(to bottom, rgba(0, 255, 119, 0.05), transparent);
+            border-bottom: 1px solid #1a1a1a;
         }
 
         .header h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
             color: var(--flexus-green);
-            font-size: 2.5rem;
-            letter-spacing: 8px;
-            margin: 0;
-            text-shadow: 0 0 20px rgba(0, 255, 119, 0.3);
-        }
-
-        /* --- CONTADOR DE IMPACTO --- */
-        .stats-box {
-            background: var(--card-bg);
-            padding: 30px;
-            border-radius: 20px;
-            margin-top: -30px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            text-align: center;
-            min-width: 280px;
-            border: 1px solid #222;
-        }
-
-        #ads-count {
-            font-size: 5rem;
-            font-weight: 900;
-            display: block;
-            line-height: 1;
-            background: linear-gradient(to bottom, #fff, #666);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .stats-label {
-            color: var(--text-gray);
+            letter-spacing: 12px;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            font-size: 0.8rem;
-            margin-top: 10px;
+            text-shadow: 0 0 30px rgba(0, 255, 119, 0.5);
+            margin-bottom: 10px;
         }
 
-        /* --- CONTENEDOR DE RESEÑAS --- */
-        .content {
+        .header p {
+            color: #888;
+            letter-spacing: 3px;
+            font-size: 0.9rem;
+        }
+
+        /* --- CONTENEDOR PRINCIPAL --- */
+        .container {
             width: 90%;
-            max-width: 1000px;
-            margin: 50px 0;
+            max-width: 1200px;
+            margin: 40px 0;
         }
 
-        .section-title {
-            color: #fff;
-            font-size: 1.5rem;
-            margin-bottom: 30px;
-            border-left: 4px solid var(--flexus-green);
-            padding-left: 15px;
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 40px;
         }
 
-        #reviews-list {
+        .section-header h2 {
+            font-size: 1.8rem;
+            border-left: 5px solid var(--flexus-green);
+            padding-left: 20px;
+        }
+
+        /* --- GRID DE RESEÑAS --- */
+        #reviews-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 30px;
         }
 
         /* --- TARJETA DE RESEÑA --- */
         .review-card {
             background: var(--card-bg);
-            border-radius: 15px;
-            padding: 20px;
-            border: 1px solid #222;
-            transition: transform 0.3s ease, border-color 0.3s ease;
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid #1f1f1f;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
         }
 
         .review-card:hover {
-            transform: translateY(-5px);
+            transform: translateY(-15px);
             border-color: var(--flexus-green);
+            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.6), var(--neon-glow);
         }
 
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 15px;
-        }
-
-        .avatar {
-            width: 45px;
-            height: 45px;
+        .user-avatar {
+            width: 80px;
+            height: 80px;
             border-radius: 50%;
-            border: 2px solid var(--flexus-green);
-            background-color: #333;
+            border: 3px solid var(--flexus-green);
+            margin-bottom: 15px;
+            object-fit: cover;
+            box-shadow: var(--neon-glow);
         }
 
         .user-name {
-            font-weight: bold;
-            font-size: 1rem;
+            font-weight: 600;
+            font-size: 1.2rem;
+            margin-bottom: 5px;
         }
 
         .stars {
             color: #ffcc00;
-            margin-bottom: 10px;
-            font-size: 0.9rem;
-        }
-
-        .review-text {
-            color: #ddd;
-            font-size: 0.95rem;
-            line-height: 1.5;
-            margin: 0;
-            font-style: italic;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
         }
 
         .song-tag {
-            display: inline-block;
-            margin-top: 15px;
-            font-size: 0.75rem;
-            color: var(--flexus-green);
             background: rgba(0, 255, 119, 0.1);
-            padding: 4px 10px;
-            border-radius: 5px;
+            color: var(--flexus-green);
+            padding: 6px 15px;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            border: 1px solid rgba(0, 255, 119, 0.2);
+        }
+
+        .review-text {
+            color: #bbb;
+            font-style: italic;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        /* --- MENSAJE CARGANDO --- */
+        .loading {
+            grid-column: 1 / -1;
+            padding: 100px;
+            color: #444;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+        }
+
+        /* --- RESPONSIVE --- */
+        @media (max-width: 768px) {
+            .header h1 { font-size: 2rem; letter-spacing: 5px; }
+            #reviews-grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <h1>FLEXUS PREMIUM</h1>
-    </div>
+    <header class="header">
+        <h1>FLEXUS 💎 PREMIUM</h1>
+        <p>RESEÑAS EN TIEMPO REAL DE NUESTROS OYENTES</p>
+    </header>
 
-    <div class="stats-box">
-        <span id="ads-count">0</span>
-        <div class="stats-label">Oyentes Impactados</div>
-    </div>
+    <main class="container">
+        <div class="section-header">
+            <h2>Feed de la Comunidad</h2>
+        </div>
 
-    <div class="content">
-        <h2 class="section-title">Últimas Reseñas</h2>
-        <div id="reviews-list">
-            </div>
-    </div>
+        <div id="reviews-grid">
+            <div class="loading">Sincronizando con la base de datos de Flexus...</div>
+        </div>
+    </main>
 
     <script>
-        // Función para obtener las estadísticas (Contador)
-        async function updateStats() {
+        async function fetchReviews() {
             try {
-                const res = await fetch('/api/get-stats');
-                const data = await res.json();
-                document.getElementById('ads-count').innerText = data.views || 0;
-            } catch (e) {
-                console.error("Error stats:", e);
-            }
-        }
+                const response = await fetch('/api/get-reviews');
+                const data = await response.json();
+                const grid = document.getElementById('reviews-grid');
 
-        // Función para obtener las reseñas (Feed)
-        async function updateReviews() {
-            try {
-                const res = await fetch('/api/get-reviews');
-                const reviews = await res.json();
-                const list = document.getElementById('reviews-list');
-
-                if (!reviews || reviews.length === 0) {
-                    list.innerHTML = "<p style='color: #555;'>Aún no hay reseñas registradas.</p>";
+                if (data.length === 0) {
+                    grid.innerHTML = "<div class='loading'>Aún no hay reseñas. ¡Sé el primero en el Bot!</div>";
                     return;
                 }
 
-                list.innerHTML = reviews.map(r => `
+                grid.innerHTML = data.map(r => `
                     <div class="review-card">
-                        <div class="user-info">
-                            <img src="${r.user_avatar || 'https://cdn.discordapp.com/embed/avatars/0.png'}" class="avatar">
-                            <span class="user-name">@${r.user}</span>
-                        </div>
-                        <div class="stars">${"★".repeat(r.stars)}${"☆".repeat(5-r.stars)}</div>
-                        <p class="review-text">"${r.message}"</p>
+                        <img src="${r.user_avatar || 'https://cdn.discordapp.com/embed/avatars/0.png'}" class="user-avatar" alt="Avatar">
+                        <div class="user-name">@${r.user}</div>
+                        <div class="stars">${"★".repeat(r.stars)}${"☆".repeat(5 - r.stars)}</div>
                         <div class="song-tag">🎵 ${r.song}</div>
+                        <p class="review-text">"${r.message}"</p>
                     </div>
                 `).join('');
-            } catch (e) {
-                console.error("Error reviews:", e);
-                document.getElementById('reviews-list').innerHTML = "<p>Error al cargar el feed.</p>";
+            } catch (error) {
+                console.error("Error al cargar reseñas:", error);
             }
         }
 
-        // Carga inicial
-        updateStats();
-        updateReviews();
-
-        // Refresco automático cada 10 segundos
-        setInterval(updateStats, 10000);
-        setInterval(updateReviews, 10000);
+        // Carga inicial y refresco cada 10 segundos
+        fetchReviews();
+        setInterval(fetchReviews, 10000);
     </script>
 </body>
 </html>
