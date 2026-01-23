@@ -14,7 +14,7 @@ MONGO_URL = "mongodb+srv://Alexgaming:Alex27Junio@cluster0.55a5siw.mongodb.net/?
 mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client["flexus_data"]
 stats_col = db["ads_stats"]
-reviews_col = db["reviews"]
+reviews_col = db["reviews"] # Colección vinculada a tu web de Vercel
 
 class FlexusBot(commands.Bot): 
     def __init__(self): 
@@ -23,11 +23,11 @@ class FlexusBot(commands.Bot):
         self.queue = [] 
         self.songs_played = 0
         self.current_track = None
-        self.last_text_channel = None # Guardamos el canal para enviar las reseñas
+        self.text_channel = None # Guardamos el canal para enviar la reseña
 
     async def setup_hook(self): 
         await self.tree.sync() 
-        print(f"✅ FLEXUS V3.4: SISTEMA DE RESEÑAS REPARADO") 
+        print(f"✅ FLEXUS V3.4: RESEÑAS ACTIVAS Y VINCULADAS A VERCEL") 
 
 bot = FlexusBot() 
 
@@ -53,45 +53,46 @@ class ReviewModal(ui.Modal, title="Reseña de la canción"):
         self.song_title = song_title
 
     stars = ui.TextInput(label="Puntuación (1-5)", placeholder="5", min_length=1, max_length=1)
-    reason = ui.TextInput(label="¿Por qué te ha gustado?", style=discord.TextStyle.paragraph, placeholder="Escribe tu opinión...")
+    reason = ui.TextInput(label="¿Qué te ha parecido?", style=discord.TextStyle.paragraph, placeholder="Me gustó mucho el ritmo...")
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
             rating = int(self.stars.value)
             if rating < 1 or rating > 5:
-                return await interaction.response.send_message("❌ Puntuación inválida (1-5).", ephemeral=True)
+                return await interaction.response.send_message("❌ La puntuación debe ser entre 1 y 5.", ephemeral=True)
             
-            # Guardar en MongoDB (Misma DB que anuncios)
-            await reviews_col.insert_one({
+            # Datos exactos para que aparezcan en https://fx-music-bot2.vercel.app/
+            review_data = {
                 "user": interaction.user.name,
-                "user_id": interaction.user.id,
+                "user_avatar": str(interaction.user.display_avatar.url),
                 "song": self.song_title,
                 "stars": rating,
                 "message": self.reason.value,
-                "timestamp": discord.utils.utcnow()
-            })
-            await interaction.response.send_message(f"✅ Reseña de {rating}⭐ enviada a la web.", ephemeral=True)
-        except:
-            await interaction.response.send_message("❌ Error: Introduce un número.", ephemeral=True)
+                "date": discord.utils.utcnow()
+            }
+            await reviews_col.insert_one(review_data)
+            await interaction.response.send_message(f"✅ ¡Gracias! Tu reseña aparecerá en la web.", ephemeral=True)
+        except ValueError:
+            await interaction.response.send_message("❌ Introduce un número válido.", ephemeral=True)
 
 class ReviewView(ui.View):
     def __init__(self, song_title):
-        super().__init__(timeout=180)
+        super().__init__(timeout=120)
         self.song_title = song_title
 
-    @ui.button(label="✍️ Valorar esta canción", style=discord.ButtonStyle.success, emoji="⭐")
+    @ui.button(label="⭐ Dejar Reseña", style=discord.ButtonStyle.success)
     async def leave_review(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_modal(ReviewModal(self.song_title))
 
-async def enviar_peticion_reseña(song_title):
-    """Envía el mensaje de reseña al canal donde se pidió música"""
-    if bot.last_text_channel and song_title:
+async def ask_for_review(channel, song_title):
+    """Función separada para evitar errores de contexto"""
+    if channel and song_title:
         embed = discord.Embed(
-            title="⭐ ¿Qué tal la música?",
-            description=f"Acaba de sonar: **{song_title}**\n\nAyúdanos a mejorar valorando la canción.",
-            color=0xffd700
+            title="🏁 Canción Finalizada",
+            description=f"¿Qué te pareció **{song_title}**?\nTu opinión nos ayuda a mejorar.",
+            color=0x00ff77
         )
-        await bot.last_text_channel.send(embed=embed, view=ReviewView(song_title))
+        await channel.send(embed=embed, view=ReviewView(song_title))
 
 # --- LÓGICA DE AUDIO ---
 
@@ -103,18 +104,17 @@ async def registrar_anuncio(guild):
 def play_next(guild):
     if not guild.voice_client: return
     
-    # 1. DISPARAR RESEÑA DE LA CANCIÓN ANTERIOR
-    if bot.current_track:
-        asyncio.run_coroutine_threadsafe(enviar_peticion_reseña(bot.current_track), bot.loop)
+    # TRIGGER DE RESEÑA: Al acabar (natural o skip), preguntamos
+    if bot.current_track and bot.text_channel:
+        asyncio.run_coroutine_threadsafe(ask_for_review(bot.text_channel, bot.current_track), bot.loop)
 
-    # 2. SISTEMA DE ANUNCIOS / SIGUIENTE CANCIÓN
-    es_vip = any(any(r.name == "VIP" for r in m.roles) for m in guild.voice_client.channel.members)
+    canal = guild.voice_client.channel
+    es_vip = any(any(r.name == "VIP" for r in m.roles) for m in canal.members)
 
     if bot.songs_played >= 3:
         bot.songs_played = 0
         if not es_vip and os.path.exists("anuncio.mp3"):
             source = discord.FFmpegPCMAudio("anuncio.mp3")
-            # Cuando acaba el anuncio, NO pedimos reseña (bot.current_track se mantiene)
             guild.voice_client.play(source, after=lambda e: play_next(guild))
             asyncio.run_coroutine_threadsafe(registrar_anuncio(guild), bot.loop)
             return
@@ -128,77 +128,83 @@ def play_next(guild):
     else:
         bot.current_track = None
 
-# --- COMANDOS ---
+# --- COMANDOS REESCRITOS ---
+
+@bot.tree.command(name="play", description="Busca y reproduce música")
+async def play(interaction: discord.Interaction, cancion: str):
+    await interaction.response.defer()
+    bot.text_channel = interaction.channel # Guardamos el canal para la reseña posterior
+    
+    try:
+        data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{cancion}", download=False))
+        results = data['entries']
+        if not results: return await interaction.followup.send("❌ Sin resultados.")
+        
+        view = SongView(results)
+        await interaction.followup.send(f"🎯 Resultados para: **{cancion}**", view=view)
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error: {e}")
+
+@bot.tree.command(name="skip", description="Salta la canción")
+async def skip(interaction: discord.Interaction):
+    if interaction.guild.voice_client:
+        interaction.guild.voice_client.stop() # Al parar, el 'after' de play_next disparará la reseña
+        await interaction.response.send_message("⏭️ **Saltando pista...**")
+
+# --- INTERFAZ DE SELECCIÓN ---
 
 class SongSelect(ui.Select):
     def __init__(self, options_data):
-        options = [discord.SelectOption(label=d['title'][:90], emoji="🎶", value=str(i)) for i, d in enumerate(options_data)]
+        options = [discord.SelectOption(label=d.get('title')[:90], description=f"Canal: {d.get('uploader')[:30]}", value=str(i), emoji="🎶") for i, d in enumerate(options_data)]
         super().__init__(placeholder="💎 Elige la canción...", options=options)
         self.options_data = options_data
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        bot.last_text_channel = interaction.channel # GUARDAMOS EL CANAL
-        
-        selected = self.options_data[int(self.values[0])]
-        info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(selected['webpage_url'], download=False))
+        sel = self.options_data[int(self.values[0])]
+        info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(sel.get('webpage_url') or sel.get('url'), download=False))
         
         vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
-        
         if vc.is_playing():
             bot.queue.append((info['url'], info['title']))
-            await interaction.followup.send(f"✅ **Añadida:** {info['title']}")
+            await interaction.followup.send(f"✅ Añadida: **{info['title']}**")
         else:
             bot.songs_played += 1
             bot.current_track = info['title']
             vc.play(discord.FFmpegPCMAudio(info['url'], **FFMPEG_OPTIONS), after=lambda e: play_next(interaction.guild))
-            await interaction.followup.send(f"▶️ **Reproduciendo:** {info['title']}")
+            await interaction.followup.send(f"▶️ Reproduciendo: **{info['title']}**")
 
 class SongView(ui.View):
     def __init__(self, options_data):
         super().__init__()
         self.add_item(SongSelect(options_data))
 
-@bot.tree.command(name="play", description="Busca música")
-async def play(interaction: discord.Interaction, cancion: str):
-    await interaction.response.defer()
-    data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{cancion}", download=False))
-    await interaction.followup.send(view=SongView(data['entries']))
-
-@bot.tree.command(name="skip", description="Salta la canción")
-async def skip(interaction: discord.Interaction):
-    if interaction.guild.voice_client:
-        interaction.guild.voice_client.stop() # Esto activará play_next y por tanto la reseña
-        await interaction.response.send_message("⏭️ **Saltada.**")
-
-@bot.tree.command(name="stop", description="Detener")
+# --- RESTO DE COMANDOS (IGUALES) ---
+@bot.tree.command(name="stop", description="Detiene el bot")
 async def stop(interaction: discord.Interaction):
     bot.queue.clear()
     bot.current_track = None
     if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect()
-    await interaction.response.send_message("⏹️ **Detenido.**")
+    await interaction.response.send_message("⏹️ Bot detenido.")
 
-# RESTO DE COMANDOS (IGUALES AL ORIGINAL)
-@bot.tree.command(name="pause")
-async def pause(i: discord.Interaction):
-    if i.guild.voice_client: i.guild.voice_client.pause()
-    await i.response.send_message("⏸️")
+@bot.tree.command(name="pause", description="Pausa")
+async def pause(interaction: discord.Interaction):
+    if interaction.guild.voice_client: interaction.guild.voice_client.pause()
+    await interaction.response.send_message("⏸️ Pausado.")
 
-@bot.tree.command(name="resume")
-async def resume(i: discord.Interaction):
-    if i.guild.voice_client: i.guild.voice_client.resume()
-    await i.response.send_message("▶️")
+@bot.tree.command(name="resume", description="Reanudar")
+async def resume(interaction: discord.Interaction):
+    if interaction.guild.voice_client: interaction.guild.voice_client.resume()
+    await interaction.response.send_message("▶️ Reanudado.")
 
-@bot.tree.command(name="nowplaying")
-async def np(i: discord.Interaction):
-    await i.response.send_message(f"🎧: {bot.current_track}")
+@bot.tree.command(name="stats", description="Ver estadísticas")
+async def stats(interaction: discord.Interaction):
+    data = await stats_col.find_one({"id": "global"})
+    v = data["views"] if data else 0
+    await interaction.response.send_message(f"📊 Impacto Total: {v} oyentes.")
 
-@bot.tree.command(name="help")
-async def help_cmd(i: discord.Interaction):
-    await i.response.send_message("👑 Comandos: play, skip, stop, pause, resume, nowplaying, info")
-
-@bot.tree.command(name="info")
-async def info(i: discord.Interaction):
-    await i.response.send_message("Flexus V3.4 Premium - Sistema de Reseñas en Vercel Activo")
+@bot.tree.command(name="help", description="Ayuda")
+async def help_cmd(interaction: discord.Interaction):
+    await interaction.response.send_message("👑 **Comandos Flexus:**\n`play, skip, stop, pause, resume, stats, info`")
 
 bot.run(TOKEN)
