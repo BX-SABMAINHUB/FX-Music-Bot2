@@ -4,211 +4,212 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flexus Premium | Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
     <style>
         :root {
-            --flexus-green: #00ff77;
-            --bg-dark: #050505;
-            --card-bg: #121212;
-            --neon-glow: 0 0 15px rgba(0, 255, 119, 0.3);
+            --neon: #00ff77;
+            --dark: #050505;
+            --glass: rgba(255, 255, 255, 0.05);
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            background-color: var(--bg-dark);
-            color: #ffffff;
+            background-color: var(--dark);
+            color: #fff;
             font-family: 'Poppins', sans-serif;
-            overflow-x: hidden;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            min-height: 100vh;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(0, 255, 119, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(0, 255, 119, 0.05) 0%, transparent 40%);
         }
 
-        /* --- FONDO ANIMADO --- */
-        body::before {
-            content: "";
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle at 50% 50%, #0a1f14 0%, #050505 100%);
-            z-index: -1;
-        }
-
-        /* --- CABECERA --- */
+        /* --- HEADER EFEKTO --- */
         .header {
-            width: 100%;
-            padding: 60px 20px;
+            padding: 100px 20px;
             text-align: center;
-            background: linear-gradient(to bottom, rgba(0, 255, 119, 0.05), transparent);
-            border-bottom: 1px solid #1a1a1a;
+            border-bottom: 1px solid rgba(0, 255, 119, 0.1);
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(10px);
         }
 
         .header h1 {
-            font-size: 3.5rem;
-            font-weight: 800;
-            color: var(--flexus-green);
-            letter-spacing: 12px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 4.5rem;
+            font-weight: 700;
+            color: var(--neon);
+            letter-spacing: 20px;
+            text-shadow: 0 0 20px var(--neon), 0 0 40px rgba(0, 255, 119, 0.2);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 10px var(--neon); }
+            to { text-shadow: 0 0 30px var(--neon), 0 0 50px var(--neon); }
+        }
+
+        .status-bar {
+            margin-top: 20px;
+            font-size: 0.8rem;
+            color: var(--neon);
             text-transform: uppercase;
-            text-shadow: 0 0 30px rgba(0, 255, 119, 0.5);
-            margin-bottom: 10px;
+            letter-spacing: 5px;
         }
 
-        .header p {
-            color: #888;
-            letter-spacing: 3px;
-            font-size: 0.9rem;
-        }
-
-        /* --- CONTENEDOR PRINCIPAL --- */
+        /* --- GRID --- */
         .container {
-            width: 90%;
-            max-width: 1200px;
-            margin: 40px 0;
+            max-width: 1400px;
+            margin: 60px auto;
+            padding: 0 20px;
         }
 
-        .section-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 40px;
-        }
-
-        .section-header h2 {
-            font-size: 1.8rem;
-            border-left: 5px solid var(--flexus-green);
-            padding-left: 20px;
-        }
-
-        /* --- GRID DE RESEÑAS --- */
-        #reviews-grid {
+        .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 30px;
+            grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+            gap: 40px;
         }
 
-        /* --- TARJETA DE RESEÑA --- */
-        .review-card {
-            background: var(--card-bg);
-            border-radius: 20px;
-            padding: 30px;
-            border: 1px solid #1f1f1f;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        /* --- CARD DESIGN --- */
+        .card {
+            background: var(--glass);
+            border-radius: 30px;
+            padding: 40px;
+            border: 1px solid rgba(0, 255, 119, 0.1);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(5px);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: -50%; left: -50%; width: 200%; height: 200%;
+            background: conic-gradient(transparent, transparent, transparent, var(--neon));
+            animation: rotate 6s linear infinite;
+            z-index: -1;
+            opacity: 0.1;
+        }
+
+        @keyframes rotate {
+            100% { transform: rotate(360deg); }
+        }
+
+        .card:hover {
+            transform: scale(1.05) translateY(-10px);
+            border-color: var(--neon);
+            box-shadow: 0 0 30px rgba(0, 255, 119, 0.2);
+        }
+
+        .user-info {
             display: flex;
-            flex-direction: column;
             align-items: center;
-            text-align: center;
+            gap: 20px;
+            margin-bottom: 25px;
         }
 
-        .review-card:hover {
-            transform: translateY(-15px);
-            border-color: var(--flexus-green);
-            box-shadow: 0 15px 45px rgba(0, 0, 0, 0.6), var(--neon-glow);
-        }
-
-        .user-avatar {
+        .avatar {
             width: 80px;
             height: 80px;
             border-radius: 50%;
-            border: 3px solid var(--flexus-green);
-            margin-bottom: 15px;
-            object-fit: cover;
-            box-shadow: var(--neon-glow);
+            border: 2px solid var(--neon);
+            padding: 3px;
         }
 
-        .user-name {
+        .username {
             font-weight: 600;
-            font-size: 1.2rem;
-            margin-bottom: 5px;
+            font-size: 1.4rem;
         }
 
         .stars {
             color: #ffcc00;
-            font-size: 1.3rem;
-            margin-bottom: 15px;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
         }
 
         .song-tag {
+            display: inline-block;
             background: rgba(0, 255, 119, 0.1);
-            color: var(--flexus-green);
-            padding: 6px 15px;
+            color: var(--neon);
+            padding: 10px 25px;
             border-radius: 50px;
-            font-size: 0.8rem;
-            font-weight: 600;
-            margin-bottom: 20px;
-            border: 1px solid rgba(0, 255, 119, 0.2);
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 25px;
+            border: 1px solid rgba(0, 255, 119, 0.3);
+            width: 100%;
+            text-align: center;
         }
 
-        .review-text {
-            color: #bbb;
+        .message {
+            color: #ccc;
+            line-height: 1.8;
             font-style: italic;
-            line-height: 1.6;
-            font-size: 0.95rem;
+            font-size: 1rem;
         }
 
-        /* --- MENSAJE CARGANDO --- */
-        .loading {
-            grid-column: 1 / -1;
+        .timestamp {
+            margin-top: 30px;
+            font-size: 0.7rem;
+            color: #555;
+            text-align: right;
+        }
+
+        /* --- LOADING --- */
+        .loader {
+            text-align: center;
             padding: 100px;
-            color: #444;
-            font-size: 1.2rem;
-            letter-spacing: 2px;
+            grid-column: 1 / -1;
         }
 
-        /* --- RESPONSIVE --- */
         @media (max-width: 768px) {
-            .header h1 { font-size: 2rem; letter-spacing: 5px; }
-            #reviews-grid { grid-template-columns: 1fr; }
+            .header h1 { font-size: 2.5rem; letter-spacing: 10px; }
+            .grid { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
 
     <header class="header">
-        <h1>FLEXUS 💎 PREMIUM</h1>
-        <p>RESEÑAS EN TIEMPO REAL DE NUESTROS OYENTES</p>
+        <h1>FLEXUS</h1>
+        <div class="status-bar">● LIVE PREMIUM DATABASE ●</div>
     </header>
 
-    <main class="container">
-        <div class="section-header">
-            <h2>Feed de la Comunidad</h2>
+    <div class="container">
+        <div id="reviews-grid" class="grid">
+            <div class="loader">Sincronizando con el servidor...</div>
         </div>
-
-        <div id="reviews-grid">
-            <div class="loading">Sincronizando con la base de datos de Flexus...</div>
-        </div>
-    </main>
+    </div>
 
     <script>
         async function fetchReviews() {
             try {
                 const response = await fetch('/api/get-reviews');
-                const data = await response.json();
+                const reviews = await response.json();
                 const grid = document.getElementById('reviews-grid');
 
-                if (data.length === 0) {
-                    grid.innerHTML = "<div class='loading'>Aún no hay reseñas. ¡Sé el primero en el Bot!</div>";
+                if (reviews.length === 0) {
+                    grid.innerHTML = '<div class="loader">Esperando primeras reseñas...</div>';
                     return;
                 }
 
-                grid.innerHTML = data.map(r => `
-                    <div class="review-card">
-                        <img src="${r.user_avatar || 'https://cdn.discordapp.com/embed/avatars/0.png'}" class="user-avatar" alt="Avatar">
-                        <div class="user-name">@${r.user}</div>
-                        <div class="stars">${"★".repeat(r.stars)}${"☆".repeat(5 - r.stars)}</div>
+                grid.innerHTML = reviews.map(r => `
+                    <div class="card">
+                        <div class="user-info">
+                            <img src="${r.user_avatar}" class="avatar">
+                            <div class="username">${r.user}</div>
+                        </div>
+                        <div class="stars">${"★".repeat(r.stars)}${"☆".repeat(5-r.stars)}</div>
                         <div class="song-tag">🎵 ${r.song}</div>
-                        <p class="review-text">"${r.message}"</p>
+                        <p class="message">"${r.message}"</p>
+                        <div class="timestamp">${new Date(r.timestamp).toLocaleString()}</div>
                     </div>
                 `).join('');
             } catch (error) {
-                console.error("Error al cargar reseñas:", error);
+                console.error("Error cargando el feed:", error);
             }
         }
 
-        // Carga inicial y refresco cada 10 segundos
         fetchReviews();
         setInterval(fetchReviews, 10000);
     </script>
