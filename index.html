@@ -3,42 +3,151 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FLEXUS ADS | Live Panel</title>
+    <title>Flexus Premium | Dashboard</title>
     <style>
-        body { background: #000; color: #00ff88; font-family: 'Arial', sans-serif; text-align: center; padding-top: 100px; margin: 0; }
-        .contador { font-size: 150px; font-weight: bold; color: white; text-shadow: 0 0 30px #00ff88; transition: all 0.5s ease; }
-        .texto { font-size: 20px; color: #888; letter-spacing: 3px; font-weight: bold; }
-        .logo { letter-spacing: 10px; margin-bottom: 20px; font-size: 25px; color: #00ff88; }
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .header {
+            margin-top: 50px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #00ff77;
+            font-size: 2.5rem;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+
+        /* Sección Contador */
+        .counter-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        #ads-count {
+            font-size: 8rem;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 0 0 20px #00ff77, 0 0 40px #00ff77;
+            margin: 20px 0;
+        }
+
+        .label {
+            color: #888;
+            letter-spacing: 3px;
+            font-size: 1.2rem;
+            text-transform: uppercase;
+        }
+
+        /* Sección Reseñas */
+        .reviews-section {
+            width: 90%;
+            max-width: 800px;
+            margin-top: 60px;
+            padding-bottom: 50px;
+        }
+
+        .reviews-title {
+            color: #00ff77;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .review-card {
+            background: #111;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-left: 5px solid #00ff77;
+        }
+
+        .review-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .user-name { font-weight: bold; color: #00ff77; }
+        .stars { color: #ffd700; }
+        .song-title { color: #888; font-style: italic; font-size: 0.9rem; }
+        .message { margin-top: 10px; line-height: 1.4; }
     </style>
 </head>
 <body>
-    <div class="logo">FLEXUS PREMIUM</div>
-    <div class="contador" id="real-views">...</div>
-    <div class="texto">AUDIENCIA TOTAL DE ANUNCIOS</div>
+
+    <div class="header">
+        <h1>FLEXUS PREMIUM</h1>
+    </div>
+
+    <div class="counter-container">
+        <div id="ads-count">...</div>
+        <div class="label">Audiencia Total de Anuncios</div>
+    </div>
+
+    <div class="reviews-section">
+        <h2 class="reviews-title">Últimas Reseñas</h2>
+        <div id="reviews-list">
+            <p style="text-align: center; color: #555;">Cargando reseñas...</p>
+        </div>
+    </div>
 
     <script>
+        // FUNCIÓN PARA EL CONTADOR DE ANUNCIOS
         async function updateStats() {
             try {
-                // Añadimos un timestamp para forzar a Vercel a pedir el dato nuevo cada vez
-                const response = await fetch('/api/get-stats?t=' + Date.now());
-                if (!response.ok) throw new Error('Error en la API');
-                
-                const data = await response.json();
-                const display = document.getElementById('real-views');
-                
-                // Si el número cambió, lo actualizamos
-                if (display.innerText !== data.views.toString()) {
-                    display.innerText = data.views;
-                }
+                const res = await fetch('/api/get-stats'); // Asegúrate de que este archivo exista en /api
+                const data = await res.json();
+                document.getElementById('ads-count').innerText = data.views || 0;
             } catch (err) {
-                console.error("Error cargando estadísticas:", err);
-                document.getElementById('real-views').innerText = "ERR";
+                document.getElementById('ads-count').innerText = "ERR";
             }
         }
 
-        // Actualiza cada 3 segundos para que sea casi en tiempo real
-        setInterval(updateStats, 3000);
-        updateStats(); // Carga inicial
+        // FUNCIÓN PARA LAS RESEÑAS
+        async function updateReviews() {
+            try {
+                const res = await fetch('/api/get-reviews'); // Tienes que crear este archivo en /api
+                const reviews = await res.json();
+                const list = document.getElementById('reviews-list');
+
+                if (reviews.length === 0) {
+                    list.innerHTML = "<p style='text-align:center;'>No hay reseñas aún.</p>";
+                    return;
+                }
+
+                list.innerHTML = reviews.map(r => `
+                    <div class="review-card">
+                        <div class="review-header">
+                            <span class="user-name">@${r.user}</span>
+                            <span class="stars">${"⭐".repeat(r.stars)}</span>
+                        </div>
+                        <div class="song-title">En: ${r.song}</div>
+                        <p class="message">${r.message}</p>
+                    </div>
+                `).join('');
+            } catch (err) {
+                document.getElementById('reviews-list').innerHTML = "<p>Error al cargar reseñas.</p>";
+            }
+        }
+
+        // Carga inicial y bucle
+        updateStats();
+        updateReviews();
+        setInterval(updateStats, 5000);   // Actualiza anuncios cada 5 seg
+        setInterval(updateReviews, 10000); // Actualiza reseñas cada 10 seg
     </script>
 </body>
 </html>
