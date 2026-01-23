@@ -13,10 +13,11 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 MONGO_URL = "mongodb+srv://Alexgaming:Alex27Junio@cluster0.55a5siw.mongodb.net/?retryWrites=true&w=majority"
 VIP_ROLE_NAME = "VIP" 
 
+# Conexión a MongoDB
 mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client["flexus_data"]
 reviews_col = db["reviews"]
-blacklist_col = db["blacklist"] # <--- NUEVA COLECCIÓN PARA BANEOS
+blacklist_col = db["blacklist"] # Colección conectada a tu web de Administración
 
 class FlexusBot(commands.Bot): 
     def __init__(self): 
@@ -28,27 +29,29 @@ class FlexusBot(commands.Bot):
         self.loop_mode = False
 
     async def setup_hook(self): 
-        # ESTO ES EL PORTERO: Revisa baneo antes de CUALQUIER comando
-        @self.tree.interaction_check
-        async def check_if_banned(interaction: discord.Interaction):
-            # Buscamos si el ID del usuario está en la lista negra
-            user_banned = await blacklist_col.find_one({"user_id": str(interaction.user.id)})
-            if user_banned:
-                emb = discord.Embed(
-                    title="🚫 ACCESO DENEGADO",
-                    description="Has sido bloqueado del sistema por el administrador **Alex27Junio**.\nSi crees que es un error, contacta con el soporte.",
-                    color=0xff0000
-                )
-                await interaction.response.send_message(embed=emb, ephemeral=True)
-                return False # Bloquea el comando
-            return True # Permite el comando
-
         await self.tree.sync() 
         print(f"💎 FLEXUS V12.0: SISTEMA ANTI-ERROR Y SEGURIDAD ACTIVADOS") 
 
 bot = FlexusBot() 
 
-# CONFIGURACIÓN YTDL OPTIMIZADA PARA VELOCIDAD
+# --- EL PORTERO (SISTEMA DE BANEO REAL-TIME) ---
+# Esto corrige el error 'interaction_check was never awaited'
+@bot.tree.interaction_check
+async def check_if_banned(interaction: discord.Interaction):
+    # Buscamos en la base de datos si el ID del usuario está baneado
+    user_banned = await blacklist_col.find_one({"user_id": str(interaction.user.id)})
+    
+    if user_banned:
+        emb = discord.Embed(
+            title="🚫 ACCESO DENEGADO",
+            description="Has sido bloqueado del sistema por el administrador **Alex27Junio**.\nSi crees que es un error, contacta con soporte.",
+            color=0xff0000
+        )
+        await interaction.response.send_message(embed=emb, ephemeral=True)
+        return False # No permite ejecutar el comando
+    return True # Permite ejecutar el comando
+
+# --- CONFIGURACIÓN TÉCNICA (SOLUCIONA CIERRES RÁPIDOS) ---
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
@@ -60,7 +63,6 @@ YTDL_OPTIONS = {
     'cachedir': False
 } 
 
-# ESTO SOLUCIONA EL CIERRE RÁPIDO
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -probesize 10M -analyzeduration 10M',
     'options': '-vn -b:a 192k -ar 48000' 
@@ -85,7 +87,7 @@ class ReviewModal(ui.Modal, title="⭐ VALORACIÓN PREMIUM ⭐"):
         })
         await interaction.response.send_message(embed=discord.Embed(title="✅ GRACIAS", color=0x00ff77), ephemeral=True)
 
-# --- MOTOR DE REPRODUCCIÓN BLINDADO ---
+# --- MOTOR DE REPRODUCCIÓN ---
 def play_audio(interaction, channel_id, user, is_ad=False):
     if not interaction.guild.voice_client: return
 
