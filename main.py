@@ -12,7 +12,6 @@ from datetime import datetime
 TOKEN = os.getenv("DISCORD_TOKEN") 
 MONGO_URL = "mongodb+srv://Alexgaming:Alex27Junio@cluster0.55a5siw.mongodb.net/?retryWrites=true&w=majority"
 
-# Conexión persistente a MongoDB
 mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client["flexus_data"]
 stats_col = db["ads_stats"]
@@ -28,18 +27,15 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self): 
         await self.tree.sync() 
-        print(f"✅ FLEXUS V3.6: SISTEMA REPARADO") 
+        print(f"✅ FLEXUS V4.0: SISTEMA UNIFICADO Y CORREGIDO") 
 
 bot = FlexusBot() 
 
-# Configuración Optimizada
 YTDL_OPTIONS = {
     'format': 'bestaudio/best',
     'noplaylist': True,
     'quiet': True,
     'default_search': 'ytsearch5',
-    'no_warnings': True,
-    'extract_flat': 'in_playlist',
     'headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'}
 } 
 
@@ -51,13 +47,13 @@ ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
 # --- SISTEMA DE RESEÑAS ---
 
-class ReviewModal(ui.Modal, title="Reseña de la canción"):
+class ReviewModal(ui.Modal, title="Reseña de Flexus"):
     def __init__(self, song_title):
         super().__init__()
         self.song_title = song_title
 
     stars = ui.TextInput(label="Puntuación (1-5)", placeholder="5", min_length=1, max_length=1)
-    reason = ui.TextInput(label="Opinión", style=discord.TextStyle.paragraph, placeholder="¡Increíble!")
+    reason = ui.TextInput(label="Opinión", style=discord.TextStyle.paragraph, placeholder="Me encantó...")
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
@@ -73,86 +69,92 @@ class ReviewModal(ui.Modal, title="Reseña de la canción"):
                 "timestamp": datetime.utcnow()
             }
             await reviews_col.insert_one(review_data)
-            await interaction.response.send_message("✅ Reseña enviada a la web.", ephemeral=True)
+            await interaction.response.send_message("✅ Reseña enviada a la web con éxito.", ephemeral=True)
         except:
             await interaction.response.send_message("❌ Introduce un número del 1 al 5.", ephemeral=True)
 
 class ReviewView(ui.View):
     def __init__(self, song_title):
-        super().__init__(timeout=60)
+        super().__init__(timeout=120)
         self.song_title = song_title
 
-    @ui.button(label="✍️ Dejar Reseña", style=discord.ButtonStyle.success)
+    @ui.button(label="✍️ Dejar Reseña", style=discord.ButtonStyle.success, emoji="⭐")
     async def leave_review(self, interaction: discord.Interaction, button: ui.Button):
         await interaction.response.send_modal(ReviewModal(self.song_title))
 
 # --- LÓGICA DE AUDIO REPARADA ---
 
+async def registrar_anuncio(guild):
+    if guild.voice_client and guild.voice_client.channel:
+        oyentes = len(guild.voice_client.channel.members) - 1
+        await stats_col.update_one({"id": "global"}, {"$inc": {"views": max(0, oyentes)}}, upsert=True)
+
 def play_next(interaction):
     if not interaction.guild.voice_client: return
-
-    # Lanzar la reseña de la que acaba de terminar
+    
+    # 1. Feedback al terminar
     if bot.current_track:
         asyncio.run_coroutine_threadsafe(
-            interaction.channel.send(f"💬 ¿Qué te pareció **{bot.current_track}**?", view=ReviewView(bot.current_track)),
+            interaction.channel.send(f"🎶 Terminó: **{bot.current_track}**. ¿Te gustó?", view=ReviewView(bot.current_track)),
             bot.loop
         )
 
+    # 2. Control de anuncios
+    canal = interaction.guild.voice_client.channel
+    es_vip = any(any(r.name == "VIP" for r in m.roles) for m in canal.members)
+
+    if bot.songs_played >= 3 and not es_vip and os.path.exists("anuncio.mp3"):
+        bot.songs_played = 0
+        bot.current_track = None
+        source = discord.FFmpegPCMAudio("anuncio.mp3")
+        interaction.guild.voice_client.play(source, after=lambda e: play_next(interaction))
+        asyncio.run_coroutine_threadsafe(registrar_anuncio(interaction.guild), bot.loop)
+        return
+
+    # 3. Siguiente en cola
     if len(bot.queue) > 0:
-        url, titulo = bot.queue.pop(0)
+        url_original, titulo = bot.queue.pop(0)
         bot.songs_played += 1
         bot.current_track = titulo
         
-        # Re-extraer URL por si expiró
-        try:
-            info = ytdl.extract_info(url, download=False)
-            source_url = info['url']
-            source = discord.FFmpegPCMAudio(source_url, **FFMPEG_OPTIONS)
-            interaction.guild.voice_client.play(source, after=lambda e: play_next(interaction))
-        except Exception as e:
-            print(f"Error en reproducción: {e}")
-            play_next(interaction)
+        # Extraer URL fresca para evitar errores de expiración
+        info = ytdl.extract_info(url_original, download=False)
+        source = discord.FFmpegPCMAudio(info['url'], **FFMPEG_OPTIONS)
+        interaction.guild.voice_client.play(source, after=lambda e: play_next(interaction))
     else:
         bot.current_track = None
 
-# --- COMANDOS (1 a 19) ---
+# --- COMANDOS (19+) ---
 
 @bot.tree.command(name="play", description="Reproduce música")
 async def play(interaction: discord.Interaction, cancion: str):
     await interaction.response.defer()
-    try:
-        data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{cancion}", download=False))
-        if not data['entries']: return await interaction.followup.send("❌ No se encontró nada.")
-        
-        view = SongView(data['entries'])
-        await interaction.followup.send(f"🎯 Resultados para: **{cancion}**", view=view)
-    except Exception as e:
-        await interaction.followup.send(f"❌ Error: {e}")
+    data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{cancion}", download=False))
+    if not data['entries']: return await interaction.followup.send("❌ No se encontró nada.")
+    
+    class SongSelect(ui.Select):
+        def __init__(self, options_data):
+            super().__init__(placeholder="Elige una canción...", options=[
+                discord.SelectOption(label=d['title'][:90], value=str(i)) for i, d in enumerate(options_data)
+            ])
+            self.options_data = options_data
 
-class SongSelect(ui.Select):
-    def __init__(self, options_data):
-        options = [discord.SelectOption(label=d['title'][:90], value=str(i), description=d.get('uploader', 'YT')[:30]) for i, d in enumerate(options_data)]
-        super().__init__(placeholder="Elige una canción...", options=options)
-        self.options_data = options_data
+        async def callback(self, interaction: discord.Interaction):
+            await interaction.response.defer()
+            sel = self.options_data[int(self.values[0])]
+            vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
+            
+            if vc.is_playing():
+                bot.queue.append((sel['webpage_url'], sel['title']))
+                await interaction.followup.send(f"✅ Añadida: {sel['title']}")
+            else:
+                bot.songs_played += 1
+                bot.current_track = sel['title']
+                info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(sel['webpage_url'], download=False))
+                vc.play(discord.FFmpegPCMAudio(info['url'], **FFMPEG_OPTIONS), after=lambda e: play_next(interaction))
+                await interaction.followup.send(f"▶️ Sonando: {sel['title']}")
 
-    async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
-        sel = self.options_data[int(self.values[0])]
-        vc = interaction.guild.voice_client or await interaction.user.voice.channel.connect()
-        
-        if vc.is_playing():
-            bot.queue.append((sel['webpage_url'], sel['title']))
-            await interaction.followup.send(f"✅ Añadida: {sel['title']}")
-        else:
-            bot.current_track = sel['title']
-            source = discord.FFmpegPCMAudio(sel['url'] if 'url' in sel else sel['webpage_url'], **FFMPEG_OPTIONS)
-            vc.play(source, after=lambda e: play_next(interaction))
-            await interaction.followup.send(f"▶️ Sonando: {sel['title']}")
-
-class SongView(ui.View):
-    def __init__(self, data):
-        super().__init__()
-        self.add_item(SongSelect(data))
+    await interaction.followup.send(view=ui.View().add_item(SongSelect(data['entries'])))
 
 @bot.tree.command(name="skip")
 async def skip(interaction: discord.Interaction):
@@ -208,7 +210,7 @@ async def clear(interaction: discord.Interaction):
 @bot.tree.command(name="stats")
 async def stats(interaction: discord.Interaction):
     data = await stats_col.find_one({"id": "global"})
-    await interaction.response.send_message(f"📊 Oyentes: {data['views'] if data else 0}")
+    await interaction.response.send_message(f"📊 Impacto: {data['views'] if data else 0}")
 
 @bot.tree.command(name="leave")
 async def leave(interaction: discord.Interaction):
@@ -224,7 +226,7 @@ async def jump(interaction: discord.Interaction, pos: int):
 
 @bot.tree.command(name="restart")
 async def restart(interaction: discord.Interaction):
-    await interaction.response.send_message("🔄 Reiniciando pista...")
+    await interaction.response.send_message("🔄 Reiniciando...")
 
 @bot.tree.command(name="bassboost")
 async def bass(interaction: discord.Interaction):
@@ -240,10 +242,10 @@ async def lyrics(interaction: discord.Interaction):
 
 @bot.tree.command(name="info")
 async def info(interaction: discord.Interaction):
-    await interaction.response.send_message("💎 Flexus Bot V3.6 | Premium Audio")
+    await interaction.response.send_message("💎 Flexus Premium V4.0")
 
 @bot.tree.command(name="help")
-async def help_cmd(interaction: discord.Interaction):
+async def help(interaction: discord.Interaction):
     await interaction.response.send_message("📜 Comandos: play, skip, stop, pause, resume, queue, np, shuffle, volume, ping, clear, stats, leave, jump, restart, bassboost, loop, lyrics, info")
 
 bot.run(TOKEN)
