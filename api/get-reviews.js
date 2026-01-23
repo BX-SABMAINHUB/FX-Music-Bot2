@@ -8,12 +8,12 @@ export default async function handler(req, res) {
         const db = client.db('flexus_data');
         const reviews = await db.collection('reviews')
             .find({})
-            .sort({ timestamp: -1 }) // Usamos timestamp para ordenar
+            .sort({ timestamp: -1 }) // Ordenar por fecha real
             .limit(10)
             .toArray();
         res.status(200).json(reviews);
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        res.status(500).json({ error: "Error en base de datos" });
     } finally {
         await client.close();
     }
