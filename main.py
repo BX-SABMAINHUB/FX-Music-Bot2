@@ -14,6 +14,7 @@ MONGO_URL = "mongodb+srv://Alexgaming:Alex27Junio@cluster0.55a5siw.mongodb.net/?
 mongo_client = AsyncIOMotorClient(MONGO_URL)
 db = mongo_client["flexus_data"]
 stats_col = db["ads_stats"]
+reviews_col = db["reviews"] # Colección para las reseñas de los usuarios
 
 class FlexusBot(commands.Bot): 
     def __init__(self): 
@@ -25,7 +26,7 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self): 
         await self.tree.sync() 
-        print(f"✅ FLEXUS V3.2: BUSCADOR REPARADO + AUDIO HD") 
+        print(f"✅ FLEXUS V3.3: BUSCADOR + AUDIO HD + RESEÑAS") 
 
 bot = FlexusBot() 
 
@@ -45,6 +46,43 @@ FFMPEG_OPTIONS = {
 }
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
 
+# --- SISTEMA DE RESEÑAS ---
+
+class ReviewModal(ui.Modal, title="Deja tu reseña"):
+    stars = ui.TextInput(label="Valoración (1 a 5 estrellas)", placeholder="Ej: 5", min_length=1, max_length=1)
+    reason = ui.TextInput(label="¿Qué te ha parecido?", style=discord.TextStyle.paragraph, placeholder="Me ha encantado la calidad...", min_length=5)
+
+    def __init__(self, song_title):
+        super().__init__()
+        self.song_title = song_title
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            val = int(self.stars.value)
+            if val < 1 or val > 5: raise ValueError
+            
+            # Guardamos en la misma DB de MongoDB
+            review_doc = {
+                "usuario": str(interaction.user),
+                "estrellas": val,
+                "mensaje": self.reason.value,
+                "cancion": self.song_title,
+                "fecha": discord.utils.utcnow()
+            }
+            await reviews_col.insert_one(review_doc)
+            await interaction.response.send_message(f"⭐ ¡Gracias por tu reseña de {val} estrellas, {interaction.user.name}!", ephemeral=True)
+        except ValueError:
+            await interaction.response.send_message("❌ Debes poner un número del 1 al 5.", ephemeral=True)
+
+class ReviewView(ui.View):
+    def __init__(self, song_title):
+        super().__init__(timeout=180)
+        self.song_title = song_title
+
+    @ui.button(label="Valorar canción", style=discord.ButtonStyle.success, emoji="⭐")
+    async def rate_button(self, interaction: discord.Interaction, button: ui.Button):
+        await interaction.response.send_modal(ReviewModal(self.song_title))
+
 # --- LÓGICA DE AUDIO Y ANUNCIOS ---
 
 async def registrar_anuncio(guild):
@@ -56,6 +94,15 @@ def play_next(interaction):
     if not interaction.guild.voice_client: return
     canal = interaction.guild.voice_client.channel
     
+    # 1. Al acabar una canción, preguntamos reseña (si había canción sonando)
+    if bot.current_track:
+        asyncio.run_coroutine_threadsafe(
+            interaction.channel.send(
+                embed=discord.Embed(description=f"✅ Ha terminado: **{bot.current_track}**\n¿Qué te ha parecido?", color=0xffd700),
+                view=ReviewView(bot.current_track)
+            ), bot.loop
+        )
+
     # SISTEMA VIP: Si hay alguien con rol "VIP", no hay anuncios
     es_vip = any(any(r.name == "VIP" for r in m.roles) for m in canal.members)
 
@@ -82,7 +129,6 @@ class SongSelect(ui.Select):
     def __init__(self, options_data):
         options = []
         for i, d in enumerate(options_data):
-            # Priorizamos el título real sobre el genérico
             title = d.get('title') or d.get('alt_title') or "Canción seleccionada"
             uploader = d.get('uploader') or "YouTube"
             options.append(discord.SelectOption(
@@ -97,12 +143,10 @@ class SongSelect(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
-        
         selected_index = int(self.values[0])
         selected_data = self.options_data[selected_index]
         video_url = selected_data.get('webpage_url') or selected_data.get('url')
         
-        # Extracción final para el audio directo
         info = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(video_url, download=False))
         real_url = info['url']
         titulo = info['title']
@@ -134,19 +178,12 @@ class SongView(ui.View):
 async def play(interaction: discord.Interaction, cancion: str):
     await interaction.response.defer()
     try:
-        # Buscamos sin extract_flat para obtener nombres reales SIEMPRE
         data = await asyncio.get_event_loop().run_in_executor(None, lambda: ytdl.extract_info(f"ytsearch5:{cancion}", download=False))
         results = data['entries']
-
-        if not results:
-            return await interaction.followup.send("❌ No he encontrado resultados.")
+        if not results: return await interaction.followup.send("❌ No he encontrado resultados.")
 
         view = SongView(results)
-        embed = discord.Embed(
-            title="🎯 Resultados para: " + cancion, 
-            description="He encontrado estas canciones parecidas. ¡Elige una!", 
-            color=0x00ff77
-        )
+        embed = discord.Embed(title="🎯 Resultados para: " + cancion, description="¡Elige una!", color=0x00ff77)
         await interaction.followup.send(embed=embed, view=view)
     except Exception as e:
         await interaction.followup.send(f"❌ Error en la búsqueda: {e}")
@@ -171,6 +208,7 @@ async def skip(interaction: discord.Interaction):
 @bot.tree.command(name="stop", description="Limpia todo y desconecta")
 async def stop(interaction: discord.Interaction):
     bot.queue.clear()
+    bot.current_track = None
     if interaction.guild.voice_client: await interaction.guild.voice_client.disconnect()
     await interaction.response.send_message("⏹️ **Bot detenido y cola vaciada.**")
 
@@ -252,9 +290,9 @@ async def lyrics(interaction: discord.Interaction):
 
 @bot.tree.command(name="info", description="Información del sistema")
 async def info(interaction: discord.Interaction):
-    embed = discord.Embed(title="Flexus Bot V3.2 Premium", color=0x00ff77)
+    embed = discord.Embed(title="Flexus Bot V3.3 Premium", color=0x00ff77)
     embed.add_field(name="Calidad", value="192kbps HD", inline=True)
-    embed.add_field(name="VIP", value="Soportado", inline=True)
+    embed.add_field(name="Reseñas", value="Activadas", inline=True)
     embed.set_footer(text="By AlexGaming")
     await interaction.response.send_message(embed=embed)
 
