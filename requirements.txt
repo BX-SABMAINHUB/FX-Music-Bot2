@@ -1,5 +1,4 @@
 discord.py
 yt-dlp
 motor
-flask
-flask-cors
+PyNaCl
