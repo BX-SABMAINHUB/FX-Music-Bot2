@@ -1,5 +1,6 @@
 discord.py
 yt-dlp
 motor
-dnspython
-PyNaCl
+flask
+flask-cors
+requests
