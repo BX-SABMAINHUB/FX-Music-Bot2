@@ -1,87 +1,15 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Flexus | Admin Review Panel</title>
-    <style>
-        :root { --neon: #00ff88; --bg: #050505; --card: #121212; }
-        body { background: var(--bg); color: white; font-family: 'Courier New', monospace; margin: 0; display: flex; justify-content: center; }
-        
-        #login-screen { align-self: center; border: 1px solid var(--neon); padding: 40px; background: var(--card); text-align: center; box-shadow: 0 0 20px var(--neon); }
-        input { background: #000; border: 1px solid var(--neon); color: var(--neon); padding: 10px; margin: 10px 0; width: 80%; outline: none; }
-        
-        #panel { display: none; width: 95%; max-width: 1100px; padding-top: 50px; }
-        header { display: flex; justify-content: space-between; border-bottom: 2px solid var(--neon); padding-bottom: 10px; margin-bottom: 30px; }
-        
-        .review-card {
-            background: var(--card); border: 1px solid #333; padding: 20px; margin-bottom: 15px;
-            display: grid; grid-template-columns: 1fr 2fr 1.5fr 1fr 1fr; gap: 15px; align-items: center;
-            border-left: 5px solid var(--neon); transition: 0.3s;
-        }
-        .review-card:hover { transform: scale(1.01); background: #1a1a1a; }
-        
-        .user { color: var(--neon); font-weight: bold; }
-        .song { color: #ff00ff; font-style: italic; }
-        .stars { color: #ffcc00; }
-        .btn-reset { background: #ff4444; color: white; border: none; padding: 10px 20px; cursor: pointer; }
-    </style>
-</head>
-<body>
-
-    <div id="login-screen">
-        <h1 style="color: var(--neon)">ACCESS_REQUIRED</h1>
-        <input type="text" id="user" placeholder="USUARIO">
-        <input type="password" id="pass" placeholder="CONTRASEÑA">
-        <br>
-        <button onclick="login()" style="background: var(--neon); color: black; border: none; padding: 10px 40px; font-weight: bold; cursor: pointer;">ENTRAR</button>
-    </div>
-
-    <div id="panel">
-        <header>
-            <h1>FLEXUS_SYSTEM_MONITOR V12.0</h1>
-            <button class="btn-reset" onclick="resetDB()">HARD_RESET</button>
-        </header>
-
-        <div style="display: grid; grid-template-columns: 1fr 2fr 1.5fr 1fr 1fr; padding: 10px; font-size: 12px; color: var(--neon); opacity: 0.6;">
-            <span>HORA</span><span>MENSAJE</span><span>CANCION</span><span>PUNTUACION</span><span>USUARIO</span>
+<script>
+async function verResenas() {
+    const res = await fetch('/api/resenas');
+    const datos = await res.json();
+    const caja = document.getElementById('lista-resenas'); // Asegúrate de tener un div con este ID
+    
+    caja.innerHTML = datos.map(r => `
+        <div class="review-card">
+            <p><strong>${r.usuario}</strong>: ${r.mensaje}</p>
+            <span>Nota: ${r.estrellas} ⭐</span>
         </div>
-
-        <div id="container"></div>
-    </div>
-
-    <script>
-        function login() {
-            if(document.getElementById('user').value === "Alex27Junio" && document.getElementById('pass').value === "Alex27Junio") {
-                document.getElementById('login-screen').style.display = 'none';
-                document.getElementById('panel').style.display = 'block';
-                setInterval(fetchReviews, 2000); // RECARGA REAL CADA 2 SEGUNDOS
-            } else { alert("ERROR_DE_CREDENCIALES"); }
-        }
-
-        async function fetchReviews() {
-            try {
-                const res = await fetch('http://localhost:5000/api/reviews');
-                const data = await res.json();
-                const container = document.getElementById('container');
-                container.innerHTML = "";
-                data.reverse().forEach(r => {
-                    container.innerHTML += `
-                        <div class="review-card">
-                            <span style="opacity:0.5">${r.hora}</span>
-                            <span>"${r.mensaje}"</span>
-                            <span class="song">${r.musica}</span>
-                            <span class="stars">${r.estrellas} ⭐</span>
-                            <span class="user">@${r.usuario}</span>
-                        </div>`;
-                });
-            } catch (e) { console.log("Bot desconectado..."); }
-        }
-
-        async function resetDB() {
-            if(confirm("¿BORRAR TODO?")) {
-                await fetch('http://localhost:5000/api/reset', {method: 'POST'});
-            }
-        }
-    </script>
-</body>
-</html>
+    `).join('');
+}
+verResenas();
+</script>
