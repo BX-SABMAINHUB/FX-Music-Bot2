@@ -3,4 +3,3 @@ yt-dlp
 motor
 flask
 flask-cors
-requests
