@@ -12,7 +12,7 @@ from datetime import datetime
 # --- CONFIGURACIÓN ÉLITE ---
 TOKEN = os.getenv("DISCORD_TOKEN") 
 MONGO_URL = "mongodb+srv://Alexgaming:Alex27Junio@cluster0.55a5siw.mongodb.net/?retryWrites=true&w=majority"
-VERCEL_WEBHOOK_URL = "https://tu-proyecto.vercel.app/api/webhook" # CAMBIA ESTO
+VERCEL_WEBHOOK_URL = "https://fx-music-bot2.vercel.app" # CAMBIA ESTO
 VIP_ROLE_NAME = "VIP" 
 
 mongo_client = AsyncIOMotorClient(MONGO_URL)
