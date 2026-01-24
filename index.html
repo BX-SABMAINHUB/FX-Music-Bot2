@@ -2,205 +2,84 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flexus | Panel de Reseñas Pro</title>
+    <title>Flexus | Admin Review Panel</title>
     <style>
-        :root {
-            --primary: #00ff88;
-            --bg: #0a0a0c;
-            --card-bg: #16161a;
-            --text: #e0e0e0;
-            --danger: #ff4444;
-        }
-
-        body {
-            font-family: 'Segoe UI', Roboto, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-
-        /* --- LOGIN STYLE --- */
-        #login-screen {
-            background: var(--card-bg);
-            padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 0 30px rgba(0, 255, 136, 0.1);
-            border: 1px solid rgba(0, 255, 136, 0.2);
-            text-align: center;
-            width: 300px;
-        }
-
-        input {
-            width: 100%;
-            padding: 12px;
-            margin: 10px 0;
-            background: #222;
-            border: 1px solid #444;
-            color: white;
-            border-radius: 8px;
-            box-sizing: border-box;
-        }
-
-        button {
-            cursor: pointer;
-            transition: 0.3s;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-
-        .btn-login {
-            width: 100%;
-            padding: 12px;
-            background: var(--primary);
-            border: none;
-            color: black;
-            border-radius: 8px;
-        }
-
-        .btn-login:hover { box-shadow: 0 0 15px var(--primary); }
-
-        /* --- MAIN PANEL STYLE --- */
-        #main-panel {
-            display: none;
-            width: 90%;
-            max-width: 800px;
-            animation: fadeIn 0.5s ease;
-        }
-
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid var(--primary);
-            padding-bottom: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        h1 { color: var(--primary); letter-spacing: 2px; }
-
+        :root { --neon: #00ff88; --bg: #050505; --card: #121212; }
+        body { background: var(--bg); color: white; font-family: 'Courier New', monospace; margin: 0; display: flex; justify-content: center; }
+        
+        #login-screen { align-self: center; border: 1px solid var(--neon); padding: 40px; background: var(--card); text-align: center; box-shadow: 0 0 20px var(--neon); }
+        input { background: #000; border: 1px solid var(--neon); color: var(--neon); padding: 10px; margin: 10px 0; width: 80%; outline: none; }
+        
+        #panel { display: none; width: 95%; max-width: 1100px; padding-top: 50px; }
+        header { display: flex; justify-content: space-between; border-bottom: 2px solid var(--neon); padding-bottom: 10px; margin-bottom: 30px; }
+        
         .review-card {
-            background: var(--card-bg);
-            padding: 1.5rem;
-            border-radius: 12px;
-            margin-bottom: 1rem;
-            border-left: 4px solid var(--primary);
-            position: relative;
+            background: var(--card); border: 1px solid #333; padding: 20px; margin-bottom: 15px;
+            display: grid; grid-template-columns: 1fr 2fr 1.5fr 1fr 1fr; gap: 15px; align-items: center;
+            border-left: 5px solid var(--neon); transition: 0.3s;
         }
-
-        .btn-reset {
-            background: transparent;
-            border: 1px solid var(--danger);
-            color: var(--danger);
-            padding: 8px 15px;
-            border-radius: 5px;
-        }
-
-        .btn-reset:hover {
-            background: var(--danger);
-            color: white;
-        }
-
-        .add-review-section {
-            background: #1c1c21;
-            padding: 1rem;
-            border-radius: 12px;
-            margin-bottom: 2rem;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .review-card:hover { transform: scale(1.01); background: #1a1a1a; }
+        
+        .user { color: var(--neon); font-weight: bold; }
+        .song { color: #ff00ff; font-style: italic; }
+        .stars { color: #ffcc00; }
+        .btn-reset { background: #ff4444; color: white; border: none; padding: 10px 20px; cursor: pointer; }
     </style>
 </head>
 <body>
 
     <div id="login-screen">
-        <h2 style="color: var(--primary)">ACCESO ADMIN</h2>
-        <input type="text" id="user" placeholder="Usuario">
-        <input type="password" id="pass" placeholder="Contraseña">
-        <button class="btn-login" onclick="checkLogin()">Entrar</button>
-        <p id="error-msg" style="color: var(--danger); font-size: 12px; display: none;">Datos incorrectos</p>
+        <h1 style="color: var(--neon)">ACCESS_REQUIRED</h1>
+        <input type="text" id="user" placeholder="USUARIO">
+        <input type="password" id="pass" placeholder="CONTRASEÑA">
+        <br>
+        <button onclick="login()" style="background: var(--neon); color: black; border: none; padding: 10px 40px; font-weight: bold; cursor: pointer;">ENTRAR</button>
     </div>
 
-    <div id="main-panel">
+    <div id="panel">
         <header>
-            <h1>FLEXUS REVIEWS</h1>
-            <button class="btn-reset" onclick="resetReviews()">RESET DATA</button>
+            <h1>FLEXUS_SYSTEM_MONITOR V12.0</h1>
+            <button class="btn-reset" onclick="resetDB()">HARD_RESET</button>
         </header>
 
-        <div class="add-review-section">
-            <h3>Nueva Reseña</h3>
-            <input type="text" id="rev-name" placeholder="Nombre del Usuario">
-            <input type="text" id="rev-text" placeholder="Escribe la reseña aquí...">
-            <button class="btn-login" onclick="addReview()">Publicar Reseña</button>
+        <div style="display: grid; grid-template-columns: 1fr 2fr 1.5fr 1fr 1fr; padding: 10px; font-size: 12px; color: var(--neon); opacity: 0.6;">
+            <span>HORA</span><span>MENSAJE</span><span>CANCION</span><span>PUNTUACION</span><span>USUARIO</span>
         </div>
 
-        <div id="reviews-container">
-            </div>
+        <div id="container"></div>
     </div>
 
     <script>
-        // Configuración de acceso
-        function checkLogin() {
-            const u = document.getElementById('user').value;
-            const p = document.getElementById('pass').value;
-
-            if(u === "Alex27Junio" && p === "Alex27Junio") {
+        function login() {
+            if(document.getElementById('user').value === "Alex27Junio" && document.getElementById('pass').value === "Alex27Junio") {
                 document.getElementById('login-screen').style.display = 'none';
-                document.getElementById('main-panel').style.display = 'block';
-                loadReviews();
-            } else {
-                document.getElementById('error-msg').style.display = 'block';
-            }
+                document.getElementById('panel').style.display = 'block';
+                setInterval(fetchReviews, 2000); // RECARGA REAL CADA 2 SEGUNDOS
+            } else { alert("ERROR_DE_CREDENCIALES"); }
         }
 
-        // Lógica de reseñas
-        function loadReviews() {
-            const container = document.getElementById('reviews-container');
-            const reviews = JSON.parse(localStorage.getItem('flexus_reviews')) || [];
-            container.innerHTML = "";
-
-            reviews.forEach((r, index) => {
-                container.innerHTML += `
-                    <div class="review-card">
-                        <strong style="color: var(--primary)">@${r.name}</strong>
-                        <p>${r.text}</p>
-                        <small style="opacity: 0.5">${r.date}</small>
-                    </div>
-                `;
-            });
+        async function fetchReviews() {
+            try {
+                const res = await fetch('http://localhost:5000/api/reviews');
+                const data = await res.json();
+                const container = document.getElementById('container');
+                container.innerHTML = "";
+                data.reverse().forEach(r => {
+                    container.innerHTML += `
+                        <div class="review-card">
+                            <span style="opacity:0.5">${r.hora}</span>
+                            <span>"${r.mensaje}"</span>
+                            <span class="song">${r.musica}</span>
+                            <span class="stars">${r.estrellas} ⭐</span>
+                            <span class="user">@${r.usuario}</span>
+                        </div>`;
+                });
+            } catch (e) { console.log("Bot desconectado..."); }
         }
 
-        function addReview() {
-            const name = document.getElementById('rev-name').value;
-            const text = document.getElementById('rev-text').value;
-
-            if(!name || !text) return alert("Rellena los campos");
-
-            const reviews = JSON.parse(localStorage.getItem('flexus_reviews')) || [];
-            reviews.push({
-                name: name,
-                text: text,
-                date: new Date().toLocaleString()
-            });
-
-            localStorage.setItem('flexus_reviews', JSON.stringify(reviews));
-            document.getElementById('rev-name').value = "";
-            document.getElementById('rev-text').value = "";
-            loadReviews();
-        }
-
-        function resetReviews() {
-            if(confirm("¿Estás seguro de que quieres borrar TODAS las reseñas?")) {
-                localStorage.removeItem('flexus_reviews');
-                loadReviews();
+        async function resetDB() {
+            if(confirm("¿BORRAR TODO?")) {
+                await fetch('http://localhost:5000/api/reset', {method: 'POST'});
             }
         }
     </script>
