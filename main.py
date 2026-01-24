@@ -5,12 +5,14 @@ import yt_dlp
 import asyncio 
 import os 
 import random
+import aiohttp # Librería para enviar datos a Vercel
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
 
 # --- CONFIGURACIÓN ELITE ---
 TOKEN = os.getenv("DISCORD_TOKEN") 
 MONGO_URL = "mongodb+srv://Alexgaming:Alex27Junio@cluster0.55a5siw.mongodb.net/?retryWrites=true&w=majority"
+VERCEL_WEBHOOK_URL = "TU_URL_DE_VERCEL_AQUI/api/webhook" # Cambia esto por tu URL real
 VIP_ROLE_NAME = "VIP" 
 
 mongo_client = AsyncIOMotorClient(MONGO_URL)
@@ -28,111 +30,120 @@ class FlexusBot(commands.Bot):
 
     async def setup_hook(self): 
         await self.tree.sync() 
-        print("💎 FLEXUS V12.7: SISTEMA DE AUDIO REPARADO") 
+        print("💎 FLEXUS V12.8: CONEXIÓN VERCEL SYNC") 
 
 bot = FlexusBot() 
 
-# --- SISTEMA DE DISEÑO (FRAMES PREMIUM) ---
 def flex_frame(title, desc, color=0x00ffcc, icon="🎧"):
-    # Se eliminan los argumentos sobrantes que causaban SyntaxError
     embed = discord.Embed(
         title=f"┏━━━━━━━━━━━━━━━━━┓\n┃ {icon} {title}\n┗━━━━━━━━━━━━━━━━━┛",
         description=f"**{desc}**",
         color=color
     )
-    embed.set_footer(text="FLEXUS AUDIO ENGINE • CALIDAD 192K")
+    embed.set_footer(text="FLEXUS PREMIUM • SYNC VERCEL")
     return embed
 
-# --- MOTOR DE AUDIO ---
+# --- MOTOR DE AUDIO (CORREGIDO) ---
 YTDL_OPTS = {'format': 'bestaudio/best', 'noplaylist': True, 'quiet': True, 'default_search': 'ytsearch', 'force-ipv4': True} 
 FFMPEG_OPTS = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 'options': '-vn -b:a 192k -ar 48000'}
 ytdl = yt_dlp.YoutubeDL(YTDL_OPTS)
 
 def play_engine(interaction, user, is_ad=False):
     if not interaction.guild.voice_client: return
-    
-    # Lógica de Anuncios para no VIPs
     is_vip = any(r.name == VIP_ROLE_NAME for r in user.roles)
     if not is_ad and not is_vip and bot.songs_played >= 3 and os.path.exists("anuncio.mp3"):
         bot.songs_played = 0
         interaction.guild.voice_client.play(discord.FFmpegPCMAudio("anuncio.mp3", **FFMPEG_OPTS), 
             after=lambda e: play_engine(interaction, user, is_ad=True))
         return
-
     if bot.queue:
         url, title = bot.queue.pop(0)
         bot.current_track = title
         bot.songs_played += 1
-        
         def after_callback(error):
             async def end_task():
-                view = ui.View().add_item(ui.Button(label="VALORAR ⭐", style=discord.ButtonStyle.success))
+                view = ui.View().add_item(ui.Button(label="VALORAR EN WEB ⭐", style=discord.ButtonStyle.success))
                 view.children[0].callback = lambda i: i.response.send_modal(ReviewModal(title))
-                await interaction.channel.send(embed=flex_frame("SESIÓN TERMINADA", f"He reproducido: {title}"), view=view)
+                await interaction.channel.send(embed=flex_frame("TRACK TERMINADO", f"Final: {title}"), view=view)
             bot.loop.create_task(end_task())
-            
             if bot.loop_mode: bot.queue.insert(0, (url, title))
             play_engine(interaction, user)
-
         data = ytdl.extract_info(url, download=False)
         interaction.guild.voice_client.play(discord.FFmpegPCMAudio(data['url'], **FFMPEG_OPTS), after=after_callback)
 
-# --- MODAL RESEÑA ---
-class ReviewModal(ui.Modal, title="⭐ VALORACIÓN WEB"):
+# --- MODAL RESEÑA (CON ENVÍO A VERCEL) ---
+class ReviewModal(ui.Modal, title="⭐ RESEÑA PARA LA WEB"):
     def __init__(self, track): super().__init__(); self.track = track
     stars = ui.TextInput(label="Nota (1-5)", max_length=1)
     msg = ui.TextInput(label="Comentario", style=discord.TextStyle.paragraph)
 
     async def on_submit(self, interaction: discord.Interaction):
-        await reviews_col.insert_one({"usuario": interaction.user.name, "musica": self.track, "estrellas": self.stars.value, "mensaje": self.msg.value, "fecha": datetime.now()})
-        await interaction.response.send_message(embed=flex_frame("EXITO", "Tu reseña se ha guardado."), ephemeral=True)
+        review_data = {
+            "usuario": interaction.user.name,
+            "musica": self.track,
+            "estrellas": self.stars.value,
+            "mensaje": self.msg.value,
+            "fecha": datetime.now().isoformat()
+        }
+        
+        # 1. Guardar en MongoDB
+        await reviews_col.insert_one(review_data)
+        
+        # 2. Enviar a Vercel mediante Webhook (POST)
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(VERCEL_WEBHOOK_URL, json=review_data) as resp:
+                    if resp.status == 200:
+                        status_msg = "Reseña publicada en la Web ✅"
+                    else:
+                        status_msg = "Guardado en DB (Vercel no respondió) ⚠️"
+        except:
+            status_msg = "Guardado en DB (Error de conexión web) ⚠️"
 
-# --- LOS 19 COMANDOS MANUALES (SIN ERRORES DE SINTAXIS) ---
+        await interaction.response.send_message(embed=flex_frame("SISTEMA WEB", status_msg), ephemeral=True)
 
+# --- LOS 19 COMANDOS MANUALES ---
 @bot.tree.command(name="play", description="Busca y reproduce")
 async def play(i: discord.Interaction, buscar: str):
     await i.response.defer()
     data = await asyncio.to_thread(ytdl.extract_info, f"ytsearch5:{buscar}", download=False)
     results = data['entries']
-    
     class SongSelect(ui.Select):
         def __init__(self):
             opts = [discord.SelectOption(label=r['title'][:90], value=str(idx), emoji="📀") for idx, r in enumerate(results)]
-            super().__init__(placeholder="💎 Elige la pista de la lista...", options=opts)
-
+            super().__init__(placeholder="💎 Elige de la lista...", options=opts)
         async def callback(self, inter: discord.Interaction):
             s = results[int(self.values[0])]
             vc = inter.guild.voice_client or await inter.user.voice.channel.connect()
             bot.queue.append((s['webpage_url'], s['title']))
             if not vc.is_playing(): play_engine(inter, inter.user)
             await inter.response.edit_message(embed=flex_frame("CARGANDO", f"Pista: {s['title']}"), view=None)
-
     await i.followup.send(embed=flex_frame("BÚSQUEDA", f"Resultados para: {buscar}"), view=ui.View().add_item(SongSelect()))
 
 @bot.tree.command(name="skip")
 async def skip(i: discord.Interaction):
     if i.guild.voice_client: i.guild.voice_client.stop()
-    await i.response.send_message(embed=flex_frame("SALTAR", "Pasando a la siguiente pista.", 0x00ffcc, "⏭️"))
+    await i.response.send_message(embed=flex_frame("SKIP", "Siguiente track.", 0x00ffcc, "⏭️"))
 
 @bot.tree.command(name="stop")
 async def stop(i: discord.Interaction):
     bot.queue.clear()
     if i.guild.voice_client: await i.guild.voice_client.disconnect()
-    await i.response.send_message(embed=flex_frame("DETENER", "Desconectado y cola limpia.", 0xff0000, "⏹️"))
+    await i.response.send_message(embed=flex_frame("STOP", "Cola limpia.", 0xff0000, "⏹️"))
 
 @bot.tree.command(name="pause")
 async def pause(i: discord.Interaction):
     if i.guild.voice_client: i.guild.voice_client.pause()
-    await i.response.send_message(embed=flex_frame("PAUSA", "Música pausada.", 0xffff00, "⏸️"))
+    await i.response.send_message(embed=flex_frame("PAUSA", "Audio en pausa.", 0xffff00, "⏸️"))
 
 @bot.tree.command(name="resume")
 async def resume(i: discord.Interaction):
     if i.guild.voice_client: i.guild.voice_client.resume()
-    await i.response.send_message(embed=flex_frame("REANUDAR", "Música activa.", 0x00ffcc, "▶️"))
+    await i.response.send_message(embed=flex_frame("RESUME", "Audio activo.", 0x00ffcc, "▶️"))
 
 @bot.tree.command(name="queue")
 async def q(i: discord.Interaction):
-    tracks = "\n".join([f"• {t[1]}" for t in bot.queue[:8]]) or "Cola vacía."
+    tracks = "\n".join([f"• {t[1]}" for t in bot.queue[:5]]) or "Vacía."
     await i.response.send_message(embed=flex_frame("COLA", tracks, 0x3498db, "📋"))
 
 @bot.tree.command(name="nowplaying")
@@ -142,67 +153,63 @@ async def np(i: discord.Interaction):
 @bot.tree.command(name="shuffle")
 async def sh(i: discord.Interaction):
     random.shuffle(bot.queue)
-    # Corregido: ya no hay error de posición de argumentos
-    await i.response.send_message(embed=flex_frame("MEZCLAR", "Orden aleatorio activado.", 0x9b59b6, "🔀"))
+    await i.response.send_message(embed=flex_frame("MIX", "Cola mezclada."), 0x9b59b6, "🔀")
 
 @bot.tree.command(name="volume")
 async def vol(i: discord.Interaction, nivel: int):
-    if i.guild.voice_client:
-        i.guild.voice_client.source.volume = nivel / 100
-        await i.response.send_message(embed=flex_frame("VOLUMEN", f"Nivel: {nivel}%"))
+    if i.guild.voice_client: i.guild.voice_client.source.volume = nivel/100
+    await i.response.send_message(embed=flex_frame("VOLUMEN", f"Nivel: {nivel}%"))
 
 @bot.tree.command(name="ping")
 async def ping(i: discord.Interaction):
-    await i.response.send_message(embed=flex_frame("LATENCIA", f"{round(bot.latency*1000)}ms", 0x00ffcc, "📡"))
+    await i.response.send_message(embed=flex_frame("PING", f"{round(bot.latency*1000)}ms"))
 
 @bot.tree.command(name="clear")
 async def cl(i: discord.Interaction):
     bot.queue.clear()
-    await i.response.send_message(embed=flex_frame("LIMPIAR", "La cola ha sido borrada.", 0xff0000, "🗑️"))
+    await i.response.send_message(embed=flex_frame("LIMPIAR", "Cola borrada."))
 
 @bot.tree.command(name="leave")
 async def lv(i: discord.Interaction):
     if i.guild.voice_client: await i.guild.voice_client.disconnect()
-    await i.response.send_message(embed=flex_frame("LEAVE", "Saliendo del canal..."))
+    await i.response.send_message(embed=flex_frame("LEAVE", "Saliendo..."))
 
 @bot.tree.command(name="jump")
 async def jp(i: discord.Interaction, pos: int):
     if 0 < pos <= len(bot.queue):
-        for _ in range(pos - 1): bot.queue.pop(0)
-        # Corregido: SyntaxError eliminado al limpiar los argumentos del embed
+        for _ in range(pos-1): bot.queue.pop(0)
         if i.guild.voice_client: i.guild.voice_client.stop()
-        await i.response.send_message(embed=flex_frame("JUMP", f"Saltado a posición {pos}", 0x00ffcc, "⏩"))
+        await i.response.send_message(embed=flex_frame("JUMP", f"Saltado a {pos}"))
 
 @bot.tree.command(name="restart")
 async def rs(i: discord.Interaction):
-    if i.guild.voice_client: 
-        i.guild.voice_client.stop()
-        await i.response.send_message(embed=flex_frame("RESTART", "Reiniciando pista..."))
+    if i.guild.voice_client: i.guild.voice_client.stop()
+    await i.response.send_message(embed=flex_frame("RESTART", "Reiniciando..."))
 
 @bot.tree.command(name="bassboost")
 async def bb(i: discord.Interaction):
-    await i.response.send_message(embed=flex_frame("BASS", "Frecuencias bajas optimizadas.", 0xe67e22, "🔥"))
+    await i.response.send_message(embed=flex_frame("BASS", "Frecuencias bajas ON."))
 
 @bot.tree.command(name="loop")
 async def lp(i: discord.Interaction):
     bot.loop_mode = not bot.loop_mode
-    await i.response.send_message(embed=flex_frame("BUCLE", f"{'ON' if bot.loop_mode else 'OFF'}", 0x00ffcc, "🔁"))
+    await i.response.send_message(embed=flex_frame("LOOP", f"{'ON' if bot.loop_mode else 'OFF'}"))
 
 @bot.tree.command(name="lyrics")
-async def lyr(i: discord.Interaction):
-    await i.response.send_message(embed=flex_frame("LETRA", "Buscando metadatos...", 0x3498db, "🔍"))
+async def ly(i: discord.Interaction):
+    await i.response.send_message(embed=flex_frame("LETRA", "Buscando..."))
 
 @bot.tree.command(name="stats")
 async def st(i: discord.Interaction):
-    await i.response.send_message(embed=flex_frame("STATS", f"Tracks servidos: {bot.songs_played}"))
+    await i.response.send_message(embed=flex_frame("STATS", f"Canciones: {bot.songs_played}"))
 
 @bot.tree.command(name="help")
 async def h(i: discord.Interaction):
-    await i.response.send_message(embed=flex_frame("HELP", "Usa los comandos de barra (/) para controlar el audio."))
+    await i.response.send_message(embed=flex_frame("AYUDA", "Usa los comandos de barra."))
 
 @bot.tree.command(name="admin_ban")
-async def ab(i: discord.Interaction, user_id: str):
+async def ab(i: discord.Interaction, id: str):
     if i.user.id == 1313950667773055010:
-        await i.response.send_message(embed=flex_frame("ADMIN", f"Usuario {user_id} baneado."), ephemeral=True)
+        await i.response.send_message(embed=flex_frame("BAN", f"ID {id} bloqueado."), ephemeral=True)
 
 bot.run(TOKEN)
