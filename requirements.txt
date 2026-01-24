@@ -4,3 +4,4 @@ motor
 PyNaCl
 flask
 flask-cors
+aiohttp
