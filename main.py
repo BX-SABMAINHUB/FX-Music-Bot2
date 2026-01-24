@@ -8,24 +8,21 @@ import random
 import threading
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime
-
-# IMPORTANTE: Flask debe estar instalado en requirements.txt
 from flask import Flask, jsonify
 from flask_cors import CORS
 
-# --- CONFIGURACIÓN DE LA API WEB ---
+# --- SERVIDOR API PARA LA WEB ---
 app = Flask(__name__)
 CORS(app)
 live_reviews = []
 
 @app.route('/')
-def health_check(): return "Flexus System Online"
+def health(): return "Flexus V12 Active"
 
 @app.route('/api/reviews', methods=['GET'])
 def get_reviews(): return jsonify(live_reviews)
 
 def run_web_server():
-    # Railway asigna un puerto automáticamente
     port = int(os.environ.get("PORT", 5000))
     app.run(port=port, host='0.0.0.0')
 
@@ -49,23 +46,28 @@ class FlexusBot(commands.Bot):
         self.loop_mode = False
 
     async def setup_hook(self): 
-        # Iniciar servidor web en segundo plano
         threading.Thread(target=run_web_server, daemon=True).start()
         await self.tree.sync() 
-        print(f"💎 FLEXUS V12.0: SISTEMA CONECTADO AL PUERTO 5000") 
+        print(f"💎 FLEXUS V12.0: FULL COMANDOS + AUDIO 192K") 
 
 bot = FlexusBot() 
 
-# --- SEGURIDAD ---
 @bot.tree.interaction_check
 async def check_if_banned(interaction: discord.Interaction):
     user_banned = await blacklist_col.find_one({"user_id": str(interaction.user.id)})
-    if user_banned:
-        return False
+    if user_banned: return False
     return True
 
-# --- AUDIO 192K ---
-YTDL_OPTIONS = {'format': 'bestaudio/best', 'noplaylist': True, 'default_search': 'ytsearch', 'quiet': True} 
+# --- AUDIO ALTA FIDELIDAD ---
+YTDL_OPTIONS = {
+    'format': 'bestaudio/best',
+    'noplaylist': True,
+    'quiet': True,
+    'default_search': 'ytsearch',
+    'source_address': '0.0.0.0',
+    'force-ipv4': True,
+    'cachedir': False
+} 
 FFMPEG_OPTIONS = {
     'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
     'options': '-vn -b:a 192k -ar 48000' 
@@ -78,30 +80,23 @@ class ReviewModal(ui.Modal, title="⭐ VALORACIÓN PREMIUM"):
         super().__init__()
         self.song_title = song_title
     stars = ui.TextInput(label="Nota (1-5)", placeholder="⭐⭐⭐⭐⭐", max_length=1)
-    reason = ui.TextInput(label="Tu Opinión", style=discord.TextStyle.paragraph, min_length=5)
+    reason = ui.TextInput(label="Mensaje", style=discord.TextStyle.paragraph, min_length=5)
 
     async def on_submit(self, interaction: discord.Interaction):
-        data = {
-            "usuario": interaction.user.name,
-            "musica": self.song_title,
-            "estrellas": self.stars.value,
-            "mensaje": self.reason.value,
-            "hora": datetime.now().strftime("%H:%M")
-        }
-        live_reviews.append(data) # Para la web
-        await reviews_col.insert_one(data) # Para MongoDB
-        await interaction.response.send_message("✅ Reseña enviada al panel", ephemeral=True)
+        data = {"usuario": interaction.user.name, "musica": self.song_title, "estrellas": self.stars.value, "mensaje": self.reason.value, "hora": datetime.now().strftime("%H:%M")}
+        live_reviews.append(data)
+        await reviews_col.insert_one(data)
+        await interaction.response.send_message("✅ Reseña enviada", ephemeral=True)
 
 # --- MOTOR DE REPRODUCCIÓN ---
 def play_audio(interaction, channel_id, user, is_ad=False):
     if not interaction.guild.voice_client: return
     
-    # Lógica de Anuncio
+    # Sistema de Anuncios
     is_vip = any(role.name == VIP_ROLE_NAME for role in user.roles)
     if not is_ad and not is_vip and bot.songs_played >= 3 and os.path.exists("anuncio.mp3"):
         bot.songs_played = 0
-        interaction.guild.voice_client.play(discord.FFmpegPCMAudio("anuncio.mp3", **FFMPEG_OPTIONS), 
-                                          after=lambda e: play_audio(interaction, channel_id, user, is_ad=True))
+        interaction.guild.voice_client.play(discord.FFmpegPCMAudio("anuncio.mp3", **FFMPEG_OPTIONS), after=lambda e: play_audio(interaction, channel_id, user, is_ad=True))
         return
 
     if bot.queue:
@@ -111,119 +106,132 @@ def play_audio(interaction, channel_id, user, is_ad=False):
         
         def after_playing(error):
             track_ended = title
-            async def trigger_ui():
+            async def send_ui():
                 chan = bot.get_channel(channel_id)
-                view = ui.View().add_item(ui.Button(label="⭐ Opinar", style=discord.ButtonStyle.success))
+                view = ui.View().add_item(ui.Button(label="⭐ Dejar Reseña", style=discord.ButtonStyle.success))
                 view.children[0].callback = lambda i: i.response.send_modal(ReviewModal(track_ended))
-                await chan.send(embed=discord.Embed(title="🎼 PISTA TERMINADA", description=f"**{track_ended}**", color=0x00ff77), view=view)
-            bot.loop.create_task(trigger_ui())
-            play_audio(interaction, channel_id, user)
+                await chan.send(embed=discord.Embed(title="🎼 FIN DE PISTA", description=f"**{track_ended}**", color=0x00ff77), view=view)
+            bot.loop.create_task(send_ui())
+            if not bot.loop_mode: play_audio(interaction, channel_id, user)
+            else: 
+                bot.queue.insert(0, (url, title))
+                play_audio(interaction, channel_id, user)
 
         data = ytdl.extract_info(url, download=False)
         interaction.guild.voice_client.play(discord.FFmpegPCMAudio(data['url'], **FFMPEG_OPTIONS), after=after_playing)
 
-# --- LOS 19 COMANDOS ---
-@bot.tree.command(name="play")
-async def p(i: discord.Interaction, buscar: str):
-    await i.response.defer()
-    data = await asyncio.to_thread(ytdl.extract_info, f"ytsearch1:{buscar}", download=False)
-    s = data['entries'][0]
-    vc = i.guild.voice_client or await i.user.voice.channel.connect()
-    bot.queue.append((s['webpage_url'], s['title']))
-    if not vc.is_playing(): play_audio(i, i.channel.id, i.user)
-    await i.followup.send(f"🚀 **REPRODUCIENDO:** {s['title']}")
+# --- COMANDOS (19 EN TOTAL) ---
+@bot.tree.command(name="play", description="Reproduce música con calidad 192k")
+async def play(i: discord.Interaction, buscar: str):
+    await i.response.defer() # Evita el error de "pensando"
+    data = await asyncio.to_thread(ytdl.extract_info, f"ytsearch5:{buscar}", download=False)
+    results = data['entries']
+    
+    class SongSelect(ui.Select):
+        def __init__(self):
+            options = [discord.SelectOption(label=r['title'][:90], value=str(idx), emoji="💿") for idx, r in enumerate(results)]
+            super().__init__(placeholder="💎 Elige tu canción...", options=options)
+
+        async def callback(self, inter: discord.Interaction):
+            s = results[int(self.values[0])]
+            vc = inter.guild.voice_client or await inter.user.voice.channel.connect()
+            bot.queue.append((s['webpage_url'], s['title']))
+            if not vc.is_playing(): play_audio(inter, inter.channel.id, inter.user)
+            await inter.response.send_message(f"🚀 Añadido: **{s['title']}**")
+
+    await i.followup.send(view=ui.View().add_item(SongSelect()))
 
 @bot.tree.command(name="skip")
-async def sk(i: discord.Interaction):
+async def skip(i: discord.Interaction):
     if i.guild.voice_client: i.guild.voice_client.stop()
-    await i.response.send_message("⏭️ Siguiente pista")
+    await i.response.send_message("⏭️ Saltada")
 
 @bot.tree.command(name="stop")
-async def stp(i: discord.Interaction):
+async def stop(i: discord.Interaction):
     bot.queue.clear()
     if i.guild.voice_client: await i.guild.voice_client.disconnect()
-    await i.response.send_message("⏹️ Bot detenido")
+    await i.response.send_message("⏹️ Detenido")
 
 @bot.tree.command(name="pause")
-async def ps(i: discord.Interaction):
+async def pause(i: discord.Interaction):
     if i.guild.voice_client: i.guild.voice_client.pause()
     await i.response.send_message("⏸️ Pausado")
 
 @bot.tree.command(name="resume")
-async def rs(i: discord.Interaction):
+async def resume(i: discord.Interaction):
     if i.guild.voice_client: i.guild.voice_client.resume()
     await i.response.send_message("▶️ Reanudado")
 
 @bot.tree.command(name="queue")
 async def q(i: discord.Interaction):
-    text = "\n".join([f"**{idx+1}.** {t[1]}" for idx, t in enumerate(bot.queue[:5])]) or "Vacia"
-    await i.response.send_message(embed=discord.Embed(title="📋 COLA ACTUAL", description=text, color=0x3498db))
+    msg = "\n".join([f"**{idx+1}.** {t[1]}" for idx, t in enumerate(bot.queue[:10])]) or "Vacia"
+    await i.response.send_message(embed=discord.Embed(title="📋 COLA", description=msg, color=0x3498db))
 
 @bot.tree.command(name="nowplaying")
 async def np(i: discord.Interaction):
-    await i.response.send_message(f"🎧 Sonando ahora: **{bot.current_track}**")
+    await i.response.send_message(f"🎧 Actual: **{bot.current_track}**")
 
 @bot.tree.command(name="shuffle")
 async def sh(i: discord.Interaction):
     random.shuffle(bot.queue)
-    await i.response.send_message("🔀 Cola mezclada")
+    await i.response.send_message("🔀 Mezclado")
 
 @bot.tree.command(name="volume")
 async def vol(i: discord.Interaction, v: int):
     if i.guild.voice_client: i.guild.voice_client.source.volume = v/100
-    await i.response.send_message(f"🔊 Volumen al {v}%")
+    await i.response.send_message(f"🔊 Volumen: {v}%")
 
 @bot.tree.command(name="ping")
-async def png(i: discord.Interaction):
-    await i.response.send_message(f"📡 `{round(bot.latency*1000)}ms` de latencia")
+async def ping(i: discord.Interaction):
+    await i.response.send_message(f"📡 `{round(bot.latency*1000)}ms`")
 
 @bot.tree.command(name="clear")
 async def cl(i: discord.Interaction):
     bot.queue.clear()
-    await i.response.send_message("🗑️ Cola limpiada")
+    await i.response.send_message("🗑️ Cola vaciada")
 
 @bot.tree.command(name="leave")
 async def lv(i: discord.Interaction):
     if i.guild.voice_client: await i.guild.voice_client.disconnect()
-    await i.response.send_message("👋 Hasta luego")
+    await i.response.send_message("👋 Adiós")
 
 @bot.tree.command(name="jump")
-async def jp(i: discord.Interaction, n: int):
-    if 0 < n <= len(bot.queue):
-        for _ in range(n-1): bot.queue.pop(0)
+async def jp(i: discord.Interaction, p: int):
+    if 0 < p <= len(bot.queue):
+        for _ in range(p-1): bot.queue.pop(0)
         i.guild.voice_client.stop()
-        await i.response.send_message(f"⏩ Saltando a la pista {n}")
+        await i.response.send_message(f"⏩ Saltado a {p}")
 
 @bot.tree.command(name="restart")
-async def rst(i: discord.Interaction):
+async def rs(i: discord.Interaction):
     if i.guild.voice_client: i.guild.voice_client.stop()
-    await i.response.send_message("🔄 Reiniciando canción")
+    await i.response.send_message("🔄 Reiniciando")
 
 @bot.tree.command(name="bassboost")
 async def bb(i: discord.Interaction):
-    await i.response.send_message("🔥 Graves potenciados")
+    await i.response.send_message("🔥 Graves ON")
 
 @bot.tree.command(name="loop")
 async def lp(i: discord.Interaction):
     bot.loop_mode = not bot.loop_mode
-    await i.response.send_message(f"🔁 Modo bucle: {'ACTIVADO' if bot.loop_mode else 'DESACTIVADO'}")
+    await i.response.send_message(f"🔁 Bucle: {bot.loop_mode}")
 
 @bot.tree.command(name="lyrics")
 async def lyr(i: discord.Interaction):
-    await i.response.send_message("🔍 Buscando letras...")
+    await i.response.send_message("🔍 Buscando...")
 
 @bot.tree.command(name="stats")
-async def sts(i: discord.Interaction):
-    await i.response.send_message(f"📊 Sesión: {bot.songs_played} canciones reproducidas")
+async def st(i: discord.Interaction):
+    await i.response.send_message(f"📊 Hoy: {bot.songs_played}")
 
 @bot.tree.command(name="help")
 async def h(i: discord.Interaction):
     await i.response.send_message("👑 Comandos: play, skip, stop, pause, resume, queue, np, shuffle, volume, ping, clear, leave, jump, restart, bassboost, loop, lyrics, stats, help")
 
 @bot.tree.command(name="admin_ban")
-async def ab(i: discord.Interaction, user_id: str):
+async def admin_ban(i: discord.Interaction, user_id: str):
     if i.user.id != 1313950667773055010: return
     await blacklist_col.insert_one({"user_id": user_id})
-    await i.response.send_message(f"🚫 ID {user_id} baneada.", ephemeral=True)
+    await i.response.send_message(f"🚫 ID {user_id} bloqueada.", ephemeral=True)
 
 bot.run(TOKEN)
